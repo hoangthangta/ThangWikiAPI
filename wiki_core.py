@@ -33,6 +33,7 @@ from dateutil.rrule import *
 from read_write_file import *
 
 
+# helpers --------------------------------------------------
 def remove_emojis(data):
     """
         remove emojis from Karim Omaya (stackoverflow.com)
@@ -59,10 +60,9 @@ def remove_emojis(data):
                       ']+', re.UNICODE)
     return re.sub(emoj, '', data)
 
-
 def cls():
     os.system('cls' if os.name == 'nt' else 'clear')
-
+# -----------------------------------------------------------
 
 def get_data_by_sparql_query(query, data_format = 'json'):
     """
@@ -185,7 +185,7 @@ def search_wikidata(term, search_type = 'property', limit = 50, data_format = 'x
     return result_list
 
 
-def get_data_by_wiki_title(title, data_format = 'xml', language = 'en', timeout = 30):
+def get_data_by_title(title, data_format = 'xml', language = 'en', timeout = 30):
     """
         get xml data by title from English Wikipedia
             title: string - a Wikipedia's page title
@@ -208,13 +208,23 @@ def get_data_by_wiki_title(title, data_format = 'xml', language = 'en', timeout 
     return root
     
 
-def get_first_paragraph(title):
-    link = 'https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&exintro&explaintext&titles=' + urllib.parse.quote(title)
-    response = requests.get(link, timeout = 30) # 30s
+def get_first_paragraph(title, language = 'en'):
 
+    #link = 'https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&exintro&explaintext&titles=' + urllib.parse.quote(title)
+    
+    link = 'https://' + language + '.wikipedia.org/w/api.php'
+    params = {
+        'action': 'query',
+        'format': 'json',
+        'explaintext': True,
+        'prop': 'extracts',
+        'exintro': True,
+        'titles': title,
+        }
+        
+    response = requests.get(link, params, timeout = 30)
+    
     first_paragraph = ''
-    #print('link: ', link)
-    #print('response.text: ', response.text)
     try:
         data_dict = json.loads(response.text)
         data_dict = data_dict['query']['pages']
@@ -222,7 +232,7 @@ def get_first_paragraph(title):
         first_paragraph = data_dict[key]['extract']
         
     except Exception as e:
-        #print('Error --- get_first_paragraph: ', e)
+        print('Error --- get_first_paragraph: ', e)
         pass
 
     return first_paragraph
@@ -233,7 +243,7 @@ def get_triple(word, level = 2):
     #print('word: ', word)
 
     triple_list = []
-    term_dict = get_wikidata_by_text(word)
+    term_dict = get_wikidata_item_by_title(word)
     if not term_dict: return []
     
     instances = term_dict['instances']
@@ -246,8 +256,18 @@ def get_triple(word, level = 2):
 
     # get property data
     triple_list += get_extend_triple(triple_list, instances, subclasses, parts, level)
+    
+    # filter triples
+    filtered_list = []
+    for t in triple_list:
+        flag = True
+        for f in filtered_list:
+            if (t[0] == f[0] and t[1] == f[1] and t[2] == f[2]):
+                flag = False
+                break
+        if (flag == True): filtered_list.append(t)
 
-    return triple_list
+    return filtered_list
 
 def get_extend_triple(triple_list, instances, subclasses, parts, level):
 
@@ -260,12 +280,12 @@ def get_extend_triple(triple_list, instances, subclasses, parts, level):
     id_list += [p[0] for p in parts]
 
     for item in id_list:
-        term_dict = get_wikidata_by_wikidata_id(item)
+        term_dict = get_wikidata_item_by_id(item)
         try: 
             instances = term_dict['instances']
             for i in instances: triple_list.append([term_dict['label'], 'instance_of', i[1]])
         except Exception as e:
-            print('Error1 -- get_extend_triple: ', e)
+            #print('Error1 -- get_extend_triple: ', e)
             instances = {}
             pass
 
@@ -273,7 +293,7 @@ def get_extend_triple(triple_list, instances, subclasses, parts, level):
             subclasses = term_dict['subclasses']
             for s in subclasses: triple_list.append([term_dict['label'], 'subclass_of', s[1]])
         except Exception as e:
-            print('Error2 -- get_extend_triple: ', e)
+            #print('Error2 -- get_extend_triple: ', e)
             subclasses = {}
             pass
 
@@ -281,7 +301,7 @@ def get_extend_triple(triple_list, instances, subclasses, parts, level):
             parts = term_dict['parts']
             for p in parts: triple_list.append([term_dict['label'], 'part_of', p[1]])
         except Exception as e:
-            print('Error3 -- get_extend_triple: ', e)
+            #print('Error3 -- get_extend_triple: ', e)
             parts = {}
             pass
 
@@ -291,7 +311,7 @@ def get_extend_triple(triple_list, instances, subclasses, parts, level):
     return get_extend_triple(triple_list, instances, subclasses, parts, level)
     
 
-def get_wikidata_by_wikidata_id(wikidata_id):
+def get_wikidata_item_by_id(wikidata_id):
 
     result_dict = {}
 
@@ -307,7 +327,7 @@ def get_wikidata_by_wikidata_id(wikidata_id):
         claims = get_claims(wikidata_root, wikidata_id)
         instances = get_instance_of(claims)
         subclasses = get_subclass_of(claims)
-        #parts = get_part_of(claims)
+        parts = get_part_of(claims)
         aliases = get_alias(wikidata_root)
 
         result_dict['wikidata_id'] = wikidata_id
@@ -316,10 +336,11 @@ def get_wikidata_by_wikidata_id(wikidata_id):
         result_dict['instances'] = instances
         result_dict['subclasses'] = subclasses
         result_dict['aliases'] = aliases
+        result_dict['parts'] = parts
 
         # get the first paragraph & first sentence of Wikipedia
         sitelink = get_sitelink(wikidata_root)
-        #wiki_root = get_xml_data_by_title(sitelink)
+        #wiki_root = get_data_by_title(sitelink)
         first_paragraph = get_first_paragraph(sitelink)
         sents = sent_detector.tokenize(first_paragraph)
 
@@ -330,16 +351,16 @@ def get_wikidata_by_wikidata_id(wikidata_id):
         
         
     except Exception as e:
-        #print('Error --- get_wikidata_by_wikidata_id: ', e)
+        #print('Error --- get_wikidata_item_by_id: ', e)
         pass
     
     return result_dict
     
 
-def get_wikidata_by_text(title):
+def get_wikidata_item_by_title(title):
 
     result_dict = {}
-    root = get_xml_data_by_title(title)
+    root = get_data_by_title(title)
     
     wikidata_id = get_wikidata_id(root)
     if (wikidata_id == '' or wikidata_id == None): return {}
@@ -399,7 +420,7 @@ def get_property_datatype(root):
     except: pass
     return ''               
 
-def get_sitelink_title(root, wiki = 'enwiki'):
+def get_sitelink_title(root, wiki_lang = 'enwiki'):
     """
         get a sitelink of a Wikipedia project from the Wikidata's xml data
             root: string - xml data of Wikidata
@@ -409,7 +430,7 @@ def get_sitelink_title(root, wiki = 'enwiki'):
 
     try:
         for x in root.find('./entities/entity/sitelinks'):
-            if (x.attrib['site'] == wiki):
+            if (x.attrib['site'] == wiki_lang):
                 value = remove_emojis(x.attrib['title'])
                 if (value != ''): return value
     except: pass
@@ -458,8 +479,25 @@ def get_sentence_list_baseline(text):
 
     sen_list = text.split('.')    
     sen_list = [x.strip() for x in sen_list if x.strip() != '']
-    sen_list = [x + '.' for x in sen_list1]
+    sen_list = [x + '.' for x in sen_list]
     return sen_list
+
+def extract_first_sentence_baseline(text):  # bad code
+
+    count = 0
+    first_sentence = ''
+    for w in text:
+        first_sentence += w
+
+        if (w == '('): count += 1
+        if (w == ')'): count -= 1
+
+        if (w == '.'):        
+            if (len(first_sentence.split()) > 10 and count == 0): break
+
+        #print('----', first_sentence)
+
+    return  first_sentence
     
 def get_sentence_list_by_sentencizer(text):
     """
@@ -479,22 +517,8 @@ def get_sentence_list_by_sentencizer(text):
     sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x] 
     return sen_list
 
-def extract_first_sentence(text):  # bad code
-
-    count = 0
-    first_sentence = ''
-    for w in text:
-        first_sentence += w
-
-        if (w == '('): count += 1
-        if (w == ')'): count -= 1
-
-        if (w == '.'):        
-            if (len(first_sentence.split()) > 10 and count == 0): break
-
-        #print('----', first_sentence)
-
-    return  first_sentence
+def extract_first_sentence_by_sentenizer(text):
+    return get_sentence_list_by_sentencizer(text)[0]
 
 def get_label_by_wikidata_id(wdid, data_format = 'xml'):
     """
@@ -866,14 +890,14 @@ def get_hypernyms(values, results, level = 3, language = 'en'):
     return get_hypernyms(terms, results, level - 1, language)
     
 '''# get wikidata item
-def get_wikidata_item_by_name(item_name, file_name, depth):
+def get_wikidata_item_by_title_by_name(item_name, file_name, depth):
 
     item_name = item_name.replace(' ','_') # format page name
     root = ''
     wikidata_id = ''
     
     try:
-        root = get_xml_data_by_title(item_name)
+        root = get_data_by_title(item_name)
         wikidata_id = get_wikidata_id(root)
     except Exception as e:
         #print('Error:', e)
@@ -914,10 +938,10 @@ def get_wikidata_item_by_name(item_name, file_name, depth):
     write_wikidata_to_csv_file(file_name, wikidata_id, label, description, alias, claims)
 	
     for i in items:
-        get_wikidata_item_by_id(i, file_name, depth-1)
+        get_wikidata_item_by_title_by_id(i, file_name, depth-1)
 
 # get wikidata item
-def get_wikidata_item_by_id(wikidata_id, file_name, depth):
+def get_wikidata_item_by_title_by_id(wikidata_id, file_name, depth):
 
     if (check_exist_in_item_list(wikidata_id) == True):
         return []
@@ -950,11 +974,16 @@ def get_wikidata_item_by_id(wikidata_id, file_name, depth):
     write_to_text_file('item_id_list.txt', wikidata_id)
     write_wikidata_to_csv_file(file_name, wikidata_id, label, description, alias, claims)
     for i in items:
-        get_wikidata_item_by_id(i, file_name, depth-1)'''
+        get_wikidata_item_by_title_by_id(i, file_name, depth-1)'''
 
 #.....................................................................
 if __name__ == "__main__":
     print("Hello, this is Wiki Core library!")
-    search_wikipedia("science")
+    #print(get_wikidata_item_by_id('Q123'))
+
+    root = get_data_by_title('science')
+    text = get_page_content(root)
+
+    print(extract_first_sentence_baseline(text))
 
 
