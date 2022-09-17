@@ -8,6 +8,7 @@ This is a library used to access Wikipedia &amp; Wikidata APIs where you can get
 
 ### Example 1 - Get content & first paragraph of page title "science"
 
+Arguments: get_data_by_title(title, data_format = 'xml', language = 'en', timeout = 30)
 
     print("Hello, this is Wiki Core library!")
     root = get_data_by_title('science', language = 'en')
