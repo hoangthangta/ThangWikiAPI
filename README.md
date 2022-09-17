@@ -1,5 +1,5 @@
 # WikiLib
-A library to access Wikipedia &amp; Wikidata APIs
+This is a library used to access Wikipedia &amp; Wikidata APIs where uou can get Wikipedia pages and Wikidata items.
 
 ## Wikipedia: Examples
 
