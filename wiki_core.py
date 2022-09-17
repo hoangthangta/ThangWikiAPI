@@ -978,12 +978,16 @@ def get_wikidata_item_by_title_by_id(wikidata_id, file_name, depth):
 
 #.....................................................................
 if __name__ == "__main__":
-    print("Hello, this is Wiki Core library!")
+    #print("Hello, this is Wiki Core library!")
     #print(get_wikidata_item_by_id('Q123'))
 
-    root = get_data_by_title('science')
+    '''root = get_data_by_title('science')
     text = get_page_content(root)
+    print('page content: ', text)
+    first_para = extract_first_sentence_baseline(text)
+    print('first_para: ', first_para)'''
 
-    print(extract_first_sentence_baseline(text))
+    item = get_wikidata_item_by_id('Q123')
+    print(item)
 
 
