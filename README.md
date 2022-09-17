@@ -1,9 +1,9 @@
 # WikiLib
 A library to access Wikipedia &amp; Wikidata APIs
 
-# Examples
+## Wikipedia: Examples
 
-## Example 1 - Get content & first paragraph of page title "science"
+### Example 1 - Get content & first paragraph of page title "science"
 
 
     print("Hello, this is Wiki Core library!")
@@ -12,3 +12,13 @@ A library to access Wikipedia &amp; Wikidata APIs
     print('page content: ', text)
     first_para = extract_first_sentence_baseline(text)
     print('first_para: ', first_para)
+
+## Wikidata: Examples
+
+### Example 1 - Get Wikidata item information
+
+    item = get_wikidata_item_by_id('Q123')
+    print(item)
+   
+    item = get_wikidata_item_by_title('science')
+    print(item)
