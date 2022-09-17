@@ -10,7 +10,7 @@ This is a library used to access Wikipedia &amp; Wikidata APIs where you can get
 
 
     print("Hello, this is Wiki Core library!")
-    root = get_data_by_title('science')
+    root = get_data_by_title('science', language = 'en')
     text = get_page_content(root)
     print('page content: ', text)
     first_para = extract_first_sentence_baseline(text)
