@@ -1,4 +1,4 @@
-# WikiCapture
+# ThangWikiAPI
 This is a library used to access Wikipedia &amp; Wikidata APIs where you can get Wikipedia pages and Wikidata items. For details, please check the code!
 
 ## Dependencies
