@@ -2,8 +2,8 @@
 This is a library used to access Wikipedia &amp; Wikidata APIs where you can get Wikipedia pages and Wikidata items. For details, please check the code!
 
 ## Dependencies
-* Python >=3.6
-* spaCy == 2.3.2
+* Python >= 3.6
+* spaCy 3.4.1
 
 ## Wikipedia: Examples
 
