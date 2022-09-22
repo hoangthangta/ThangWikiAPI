@@ -22,8 +22,7 @@ sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
 import spacy
 from spacy import displacy
 nlp = spacy.load('en_core_web_md')
-nlp.add_pipe(nlp.create_pipe('sentencizer'), before='parser')
-lemmatizer = nlp.vocab.morphology.lemmatizer
+nlp.add_pipe('sentencizer', before='parser')
 
 from datetime import *
 from dateutil.easter import *
@@ -458,7 +457,7 @@ def get_page_content(root):
     return text_list[0] # first page content only
     
 
-def get_content_by_section(text): # not finish
+def get_content_by_section(text): # empty
     """
         split text into sections (level 2 and level 3)
             text: string - a given text
@@ -987,7 +986,10 @@ if __name__ == "__main__":
     first_para = extract_first_sentence_baseline(text)
     print('first_para: ', first_para)'''
 
-    item = get_wikidata_item_by_id('Q123')
-    print(item)
+    #item = get_wikidata_item_by_id('Q123')
+    #print(item)
+
+    results = search_wikidata('science')
+    print('results: ', results)
 
 
