@@ -3,7 +3,7 @@ This is a library used to access Wikipedia &amp; Wikidata APIs where you can get
 
 ## Dependencies
 * Python >= 3.6
-* spaCy 3.4.1
+* spaCy >= 3.x.x
 
 ## Wikipedia: Examples
 
