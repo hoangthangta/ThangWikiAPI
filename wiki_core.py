@@ -1,5 +1,6 @@
 import csv
 import gc
+import re
 import os
 import subprocess
 import requests
@@ -12,12 +13,9 @@ import sys
 sys.setrecursionlimit(3000)
 non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), '')
 
-import re
-boundary = re.compile('^[0-9]$')
-tag_re = re.compile(r'<[^>]+>')
 
-import nltk
-sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+#import nltk
+#sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
 
 import spacy
 from spacy import displacy
@@ -31,965 +29,1098 @@ from dateutil.relativedelta import *
 from dateutil.rrule import *
 from read_write_file import *
 
+# class Helper --------------------------------------------------
+class Helper():
 
-# helpers --------------------------------------------------
-def remove_emojis(data):
-    """
-        remove emojis from Karim Omaya (stackoverflow.com)
-    """
-    emoj = re.compile('['
-        u'\U0001F600-\U0001F64F'  # emoticons
-        u'\U0001F300-\U0001F5FF'  # symbols & pictographs
-        u'\U0001F680-\U0001F6FF'  # transport & map symbols
-        u'\U0001F1E0-\U0001F1FF'  # flags (iOS)
-        u'\U00002500-\U00002BEF'  # chinese char
-        u'\U00002702-\U000027B0'
-        u'\U00002702-\U000027B0'
-        u'\U000024C2-\U0001F251'
-        u'\U0001f926-\U0001f937'
-        u'\U00010000-\U0010ffff'
-        u'\u2640-\u2642' 
-        u'\u2600-\u2B55'
-        u'\u200d'
-        u'\u23cf'
-        u'\u23e9'
-        u'\u231a'
-        u'\ufe0f'  # dingbats
-        u'\u3030'
-                      ']+', re.UNICODE)
-    return re.sub(emoj, '', data)
+    @staticmethod
+    def create_link(link, params):
 
-def cls():
-    os.system('cls' if os.name == 'nt' else 'clear')
+        param_string = ''
+        for k, v in params.items():
+            param_string += str(k) + '=' + str(v) + '&'
+
+        link += '?' +  param_string
+        link = link.strip('&')
+
+        return link
+    
+
+    @staticmethod
+    def remove_emojis(text):
+        """
+            remove emojis from Karim Omaya (stackoverflow.com)
+        """
+        emoj = re.compile('['
+            u'\U0001F600-\U0001F64F'  # emoticons
+            u'\U0001F300-\U0001F5FF'  # symbols & pictographs
+            u'\U0001F680-\U0001F6FF'  # transport & map symbols
+            u'\U0001F1E0-\U0001F1FF'  # flags (iOS)
+            u'\U00002500-\U00002BEF'  # chinese char
+            u'\U00002702-\U000027B0'
+            u'\U00002702-\U000027B0'
+            u'\U000024C2-\U0001F251'
+            u'\U0001f926-\U0001f937'
+            u'\U00010000-\U0010ffff'
+            u'\u2640-\u2642' 
+            u'\u2600-\u2B55'
+            u'\u200d'
+            u'\u23cf'
+            u'\u23e9'
+            u'\u231a'
+            u'\ufe0f'  # dingbats
+            u'\u3030'
+                          ']+', re.UNICODE)
+        return re.sub(emoj, '', text)
+
+    '''@staticmethod
+    def cls():
+        os.system('cls' if os.name == 'nt' else 'clear')'''
 # -----------------------------------------------------------
 
-def get_data_by_sparql_query(query, data_format = 'json'):
-    """
-        get the data from Wikidata server by SPARQL queries
-            query: string - a SPARQL query
-            data_format: string - the format of return data
-            return: list - a list of results
-    """
+# class WikiRequest --------------------------------------------
+class WikiRequest():
+    #def __init__(self):
+    #    pass
 
-    result_list = []
-    link = 'https://query.wikidata.org/bigdata/namespace/wdq/sparql'
-    params = {
-        'query': query,
-        'format': data_format
-        }
-    
-    response = requests.get(link, params)
-    if (data_format == 'xml'):
-        '''root = ET.fromstring(response.text) # convert to xml
-        for x in root.find('./results/result'):
-            try:
-                name = remove_emojis(x.attrib['name'])
-                value = remove_emojis(x.find('uri').value)
-            except:
-                pass'''
-        pass
-    
-    elif(data_format == 'json'):
-        root = json.loads(response.text)
-        bindings = root['results']['bindings']
-        for binding in bindings:
-            result_list.append(binding)
+    @staticmethod
+    def get_data_by_link(link, params = {}, data_format = 'xml', timeout = 45):
+        """
+            get data from a web link
+                link: string - a web link
+                return: string - web data
+        """
+        
+        if (data_format not in ['xml', 'json']): data_format  = 'xml' # set default
 
-    return result_list
+        response = requests.get(link, params, timeout = timeout)
+        if (data_format == 'xml'): response = ET.fromstring(response.text)
+        elif (data_format == 'json'): response = json.loads(response.text)
 
-def get_data_by_link(link, params = {}, data_format = 'xml'):
-    """
-        get data from a web link
-            link: string - a web link
-            return: string - web data
-    """
-    
-    response = requests.get(link, params)
-    if (data_format == 'xml'): root = ET.fromstring(response.text) # convert to xml
-    return root
+        return response
+# -----------------------------------------------------------
 
-def search_wikipedia(term, limit = 1, language = 'en', data_format = 'json', key_len = 2):
+# class Item ------------------------------------------------
+class Item():
+    def __init__(self, wikidata_id = '', item_type = '', label = '', description = '', sitelink = '', aliases = [], \
+                 instances = [], subclasses = [], parts = [], claims = []):
 
-    result_term = ''
-    suggestion = False
+        self.wikidata_id = wikidata_id
+        self.type = item_type
+        self.label = label
+        self.description = description
+        self.sitelink = sitelink
+        
+        self.aliases = aliases
+        self.instances = instances
+        self.subclasses = subclasses
+        self.parts = parts
+        self.claims = claims
+        
+# -----------------------------------------------------------
 
-    if (len(term) < key_len): return {'value': result_term, 'suggestion': suggestion}
-    
-    link = 'https://' +  language + '.wikipedia.org/w/api.php'
-    params = {
-        'action': 'query',
-        'list': 'search',
-        'srsearch': term,
-        'srlimit': limit,
-        'srprop': 'size',
-        'formatversion': 2,
-        'format': data_format
-        }
+# class Wikidata --------------------------------------------
+class Wikidata():
 
-    response = requests.get(link, params)
-    
-    if (data_format == 'json'):
-        root = json.loads(response.text)
+    def get_item_by_id(self, wikidata_id, language = 'en', return_type = 'dict'):
+        """
+            get English texts
+        """
+
+        item_dict = {}
         try:
+
+            wikidata_id = wikidata_id[0].upper() + wikidata_id[1:]
             
-            #total_hits = root['query']['searchinfo']['totalhits']
-            #if (total_hits > 0):
-            result_term = root['query']['searchinfo']['suggestion']
-            suggestion = True
-            if (term.strip().lower() == result_term.strip().lower()): result_term = term
+            item_type = ''
+            if (wikidata_id[0] == 'Q'): item_type = 'item'
+            elif(wikidata_id[0] == 'P'): item_type = 'property'
+            else: item_type = 'unknown'
             
-        except:
-            try:
-                result_term = root['query']['search'][0]['title']
-            except: pass
+            wikidata_root = self.get_wikidata_root(wikidata_id)
+            description = self.get_description(wikidata_root, language)
+    
+            if ('disambiguation page' in description.lower() or 'wiki' in description.lower()): return {}
+
+            label = self.get_label(wikidata_root, language)
+            sitelink = self.get_sitelink(wikidata_root, language)
+            
+            claims = self.get_claims(wikidata_root, wikidata_id)
+            instances = self.get_instance_of(claims, language)
+            subclasses = self.get_subclass_of(claims, language)
+            parts = self.get_part_of(claims, language)
+            aliases = self.get_alias(wikidata_root, language)
+            
+            item_dict['wikidata_id'] = wikidata_id
+            item_dict['item_type'] = item_type
+            item_dict['label'] = label
+            item_dict['description'] = description
+            item_dict['sitelink'] = sitelink
+            
+            item_dict['instances'] = instances
+            item_dict['subclasses'] = subclasses
+            item_dict['aliases'] = aliases
+            item_dict['parts'] = parts
+            item_dict['claims'] = claims 
+        
+        except Exception as e:
+            print('Error --- get_item_by_id: ', e)
             pass
 
-    return {'value': result_term, 'suggestion': suggestion}
-
-def search_wikidata(term, search_type = 'property', limit = 50, data_format = 'xml'):
-
-    result_list = []
-    link = 'https://www.wikidata.org/w/api.php'
-    params = {
-        'action': 'wbsearchentities',
-        'language': 'en',
-        'format': data_format,
-        'type': search_type,
-        'limit': limit,
-        'search': term
-        }
+        if (return_type == 'class'):
+            return Item(item_dict['wikidata_id'], item_dict['item_type'], item_dict['label'], item_dict['description'], \
+                        item_dict['sitelink'], item_dict['aliases'], item_dict['instances'], item_dict['subclasses'], \
+                        item_dict['parts'], item_dict['claims'])
     
-    response = requests.get(link, params)
-    if (data_format == 'xml'):
-        root = ET.fromstring(response.text) # convert to xml
-        for x in root.find('./search'):
+        return item_dict
+
+    def get_item_by_title(self, title, title_language = 'en', language = 'en', return_type = 'dict'):
+
+        item_dict = {}
+        try:
+            title = title[0].upper() + title[1:]
+            
+            page = Wikipedia()
+            root = page.get_data_by_title(title, language = title_language)
+    
+            wikidata_id = self.get_id(root)
+            if (wikidata_id == '' or wikidata_id == None): return {}
+
+            item_type = ''
+            if (wikidata_id[0] == 'Q'): item_type = 'item'
+            elif(wikidata_id[0] == 'P'): item_type = 'property'
+            else: item_type = 'unknown'
+
+            wikidata_root = self.get_wikidata_root(wikidata_id)
+       
+            description = self.get_description(wikidata_root, language)
+            if ('disambiguation page' in description): return {}
+
+            label = self.get_label(wikidata_root, language)
+            sitelink = self.get_sitelink(wikidata_root, language)
+            
+            aliases = self.get_alias(wikidata_root, language)
+            claims = self.get_claims(wikidata_root, wikidata_id)
+            instances = self.get_instance_of(claims, language)
+            subclasses = self.get_subclass_of(claims, language)
+            parts = self.get_part_of(claims, language)    
+
+            item_dict['wikidata_id'] = wikidata_id
+            item_dict['item_type'] = item_type
+            item_dict['label'] = label
+            item_dict['description'] = description
+            item_dict['sitelink'] = sitelink
+            
+            item_dict['instances'] = instances
+            item_dict['subclasses'] = subclasses
+            item_dict['aliases'] = aliases
+            item_dict['parts'] = parts
+            item_dict['claims'] = claims
+            
+        except Exception as e:
+            print('Error --- get_item_by_title: ', e)
+            pass
+
+        if (return_type == 'class'):
+            return Item(item_dict['wikidata_id'], item_dict['item_type'], item_dict['label'], item_dict['description'], \
+                        item_dict['sitelink'], item_dict['aliases'], item_dict['instances'], item_dict['subclasses'], \
+                        item_dict['parts'], item_dict['claims'])
+    
+        return item_dict
+
+    def get_wikidata_root(self, wikidata_id):
+        """
+            get xml data by if from Wikidata
+                wikidata_id: string - an identifier of an Wikidata item
+                return: return: string - xml data
+        """
+    
+        if (wikidata_id == None or wikidata_id == ''): return ''
+    
+        link = 'https://www.wikidata.org/w/api.php'
+        params = {
+            'action': 'wbgetentities',
+            'format': 'xml',
+            'ids': wikidata_id,
+            }
+    
+        root = WikiRequest.get_data_by_link(link, params)
+        if (root is None): return ''
+    
+        return root
+
+    def get_property_datatype(self, root):
+        """
+            get the datatype from xml data
+                root: string - xml data
+                return: string - a property datatype
+        """
+    
+        try:
+            for x in root.find('./entities'):
+                value = Helper.remove_emojis(x.attrib['datatype'])
+                if (value != ''): return value
+        except: pass
+        return ''               
+
+    def get_sitelink(self, root, language = 'en'):
+        """
+            get a sitelink of a Wikipedia project from the Wikidata's xml data
+                root: string - xml data of Wikidata
+                wiki: string - a shortcut for a Wikipedia project
+                return: string - a sitelink
+        """
+        wiki = language + 'wiki'
+        try:
+            for x in root.find('./entities/entity/sitelinks'):
+                if (x.attrib['site'] == wiki):
+                    value = Helper.remove_emojis(x.attrib['title'])
+                    if (value != ''): return value
+        except: pass
+        return ''
+
+    def get_id(self, root):
+        """
+            get an identifier of an Wikidata item
+                root: string - xml data of Wikidata
+                return: string - wikidata_id
+        """
+    
+        for node in root.find('./query/pages/page'):
+            if (node.tag == 'pageprops'): return node.attrib['wikibase_item']
+        return ''
+
+    def get_label_by_id(self, wikidata_id, data_format = 'xml'):
+        """
+            get label by a Wikidata indenfifier
+                wikidata_id: string - an indenfifier of an Wikidata item
+                return: string - item label
+        """
+    
+        link = 'https://www.wikidata.org/w/api.php'
+        params = {
+            'action': 'wbgetentities',
+            'format': data_format,
+            'ids': wikidata_id
+            }
+    
+        root = WikiRequest.get_data_by_link(link, params)           
+        return get_label(root)
+
+
+    def get_label(self, root, language = 'en'):
+        """
+            get label from xml data
+                root: string - xml data
+                language: string - a language syntax
+                return: string - label
+        """
+    
+        try:
+            for x in root.find('./entities/entity/labels'):
+                if (language == 'en'):
+                    if (x.attrib['language'] == language + '-gb' or x.attrib['language'] == language):
+                        value = Helper.remove_emojis(x.attrib['value'])
+                        if (value != ''): return value
+                else:
+                    if (x.attrib['language'] == language):
+                        value = Helper.remove_emojis(x.attrib['value'])
+                        if (value != ''): return value
+        except:
+            pass
+        return ''
+
+    def get_description(self, root, language = 'en'):
+        """
+            get label from xml data
+                root: string - xml data
+                language: string - a language syntax
+                return: string - description
+        """
+
+        try:
+            for x in root.find('./entities/entity/descriptions'):
+                if (language == 'en'):
+                    if (x.attrib['language'] == language + '-gb' or x.attrib['language'] == language):
+                        value = Helper.remove_emojis(x.attrib['value'])
+                        if (value != ''): return value
+                else:
+                    if (x.attrib['language'] == language):
+                        value = Helper.remove_emojis(x.attrib['value'])
+                        if (value != ''): return value
+        except:
+            pass
+        return ''  
+       
+
+    def get_value_by_property(self, claim_list, property_name, language = 'en'):
+        """
+            get values of a given property
+                claim_list: list - Wikidata claims
+                property_name: string - a Wikidata property name
+                return: list - a list of properties
+        """
+    
+        result_list = []
+        try:
+            for c in claim_list:
+                if (c[1][1] == property_name):
+                    k = c[1][3] # wdid
+                    root = self.get_wikidata_root(k)
+                    label = self.get_label(root, language)
+                    result_list.append([k, label])
+        except: pass
+
+        return result_list
+
+    def get_instance_of(self, claim_list, language = 'en'):
+        """
+            get instance of a Wikidata item from its claims
+                claim_list: list - Wikidata claims
+                return: list - a list of instances
+        """
+    
+        result_list = []
+        try:
+            for c in claim_list:
+                if (c[1][1] == 'P31'):
+                    k = c[1][3]
+                    root = self.get_wikidata_root(k)
+                    instance_name = self.get_label(root, language)
+                    result_list.append([k, instance_name])
+        except: pass
+
+        return result_list
+    
+    def get_subclass_of(self, claim_list, language = 'en'):
+        """
+            get instance of a Wikidata item from its claims
+                claim_list: list - Wikidata claims
+                return: list - a list of instances
+        """
+    
+        result_list = []
+        try:
+            for c in claim_list:
+                if (c[1][1] == 'P279'):
+                    k = c[1][3]
+                    root = self.get_wikidata_root(k)
+                    instance_name = self.get_label(root, language)
+                    result_list.append([k, instance_name])
+        except: pass
+
+        return result_list
+
+    def get_part_of(self, claim_list, language = 'en'):
+        """
+            get parts of a Wikidata item from its claims
+                claim_list: list - Wikidata claims
+                return: list - a list of parts
+        """
+    
+        result_list = []
+        try:
+            for c in claim_list:
+                if (c[1][1] == 'P361'):
+                    k = c[1][3]
+                    root = self.get_wikidata_root(k)
+                    instance_name = self.get_label(root, language)
+                    result_list.append([k, instance_name])
+        except: pass
+
+        return result_list
+    
+
+    def get_nationality(self, claim_list, language = 'en'):
+        """
+            get nationality of a Wikidata item from its claims
+                claim_list: list - Wikidata claims
+                return: list - a list of nationalities
+        """
+    
+        result_list = []
+        try:
+            for c in claim_list:
+                if (c[1][1] == 'P27'):
+                    k = c[1][3]
+                    root = self.get_wikidata_root(k)
+                    country_name = self.get_label(root, language)
+                    result_list.append([k, country_name])
+        except: pass
+
+        return result_list
+	
+    def get_alias(self, root, language = 'en'):
+        """
+            get aliases of a Wikidata item from its claims
+                root: string - xml data
+                return: list - a list of aliases
+        """
+    
+        aliases = []
+        try:
+            for x in root.find('./entities/entity/aliases'):
+            
+                if (language == 'en'):
+                    if (x.attrib['id'] == language + '-gb' or x.attrib['id'] == language):
+                        for t in x:
+                            value = Helper.remove_emojis(t.attrib['value'])
+                            if (value != ''): aliases.append(value)
+                else:
+                    if (x.attrib['id'] == language):
+                        for t in x:
+                            value = Helper.remove_emojis(t.attrib['value'])
+                            if (value != ''): aliases.append(value)
+        except: pass
+    
+        return aliases
+        
+    def get_claims(self, root, wikidata_id):
+
+        claim_list = [] # statement list
+        if (root == '' or root is None): return claim_list
+        if (wikidata_id == '' or wikidata_id is None): return claim_list
+
+        s = wikidata_id # s: subject (item identifier, wikidata_id)
+        p = ob = pt = pv = q = qt = qv = ''
+        # p: predicate (property), ob: object (property value identifier)
+        # pt: object type (property value type), pv: object value (property value)
+        # q: qualifier, qt: qualifier type, qv: qualifier value
+
+        # loop each predicate (property)
+        for predicate in root.find('./entities/entity/claims'):        
+            #print('************************')
+            #print('Property: ', predicate.attrib['id'])
+            p = Helper.remove_emojis(predicate.attrib['id']) # predicate (property)
+            for claim in predicate.iter('claim'):
+                pt = Helper.remove_emojis(claim[0].attrib['datatype']) # property type
+                #print('+', pt)
+                for obj in claim.find('mainsnak'):
+                    try:
+                        try:
+                            # obj.attrib['value'].encode('unicode-escape').decode('utf-8')
+                            pv = Helper.remove_emojis(obj.attrib['value'])
+                        except Exception as e:
+                            #print('Error:', e)
+                            pass
+                        if (pv != ''):
+                            continue
+                        objdict = obj[0].attrib
+
+                        if ('id' in objdict):
+                            #print('--', objdict['id'])
+                            ob = Helper.remove_emojis(objdict['id']) # qualifier
+                        elif ('time' in objdict):
+                            #print('--', objdict['time'])
+                            pv = Helper.remove_emojis(objdict['time']) # time
+                        elif ('amount' in objdict):
+                            #print('--', objdict['amount'])
+                            pv = Helper.remove_emojis(objdict['amount']) # amount
+                        # capture other data types (globle coordinate, etc)
+                        # ...
+                        else:
+                            pass
+                            #print('--', 'empty')
+                    except Exception as e:
+                        pass
+                        #print('Error:', e) 
+                            
+                # check the number of qualifiers
+                qual_properties = [t for t in claim.findall('qualifiers/property')]
+                if (len(qual_properties) == 0):
+                    if (pt != 'wikibase-item'):
+                        r1 = [s, p, pt, pv]
+                        claim_list.append(['r1', r1]) # WST-1 statement
+                    else:
+                        r2 = [s, p, pt, ob]
+                        claim_list.append(['r2', r2]) # WST-2 statement
+                else:
+                    if (pv != ''):
+                        r3 = [s, p, pt, pv] # WST3-a
+                    else:
+                        r3 = [s, p, pt, ob] # WST3-b 
+                    try:
+                        for x in claim.find('qualifiers'):
+                            #print('----', x.attrib['id'], x.tag)
+                            q = Helper.remove_emojis(x.attrib['id']) # qualifier identifier
+                            qt = Helper.remove_emojis(x[0].attrib['datatype']) # qualifier data type
+                            subr = [q, qt]
+                            #children = x.getchildren()
+                            children =  list(x)
+                            for y in children:
+                                for z in y.find('datavalue'):
+                                    qv = '' # qualifier value
+                                    if ('id' in z.attrib):
+                                        #print('--------', z.attrib['id'])
+                                        qv = Helper.remove_emojis(z.attrib['id']) # qualifier value
+                                    elif ('time' in z.attrib):
+                                        #print('--------', z.attrib['time'])
+                                        qv = Helper.remove_emojis(z.attrib['time']) # value
+                                    elif ('amount' in z.attrib):
+                                        #print('--------', z.attrib['amount'])
+                                        qv = Helper.remove_emojis(z.attrib['amount']) # value
+                                    # capture other data types (globle coordinate, etc)
+                                    # ...   
+                                    else:
+                                        #print('--------', 'empty')
+                                        qv = '' # set to empty
+                                    if (qv != ''):
+                                        subr.append(qv)
+                                        r3.append(subr) # add a qualifier value
+                                        qv = '' # set to empty for new iterator
+                    except Exception as e:
+                        pass
+                        #print('Error: ', e)
+                    
+                    if (len(r3) > 4):
+                        claim_list.append(['r3', r3]) # WST-3 statement
+                    else:
+                        if (pt != 'wikibase-item'):
+                            claim_list.append(['r1', r3]) # WST-1 statement
+                        else:
+                            claim_list.append(['r2', r3]) # WST-2 statement
+                ob = pv = '' # reset values (important)
+            #print('************************')    
+        return claim_list     
+
+    def filter_claim_by_type(self, claim_list, claim_type = 'r1'):
+        """
+            filter claims by types
+                claim_list: list - a list of claims
+                claim_type: string - claim type (r1, r2, r3)
+                return: list - a filtered claim lists
+        """
+        
+        result_list = []
+        for x in claim_list:
+            if (x[0] == claim_type): result_list.append(x)
+               
+        return result_list     
+
+    def get_property_by_object_id(self, object_id, claim_list):
+        """
+            get properies by an object id
+                object_id: string - an identifier of an object
+                claims: list - a list of claims
+                return: list - a property list
+        """
+        
+        property_list = []
+        for x in claim_list:
+            if (x[1][2] == object_id):
+                for y in range(4, len(x[1])):
+                    property_list.append(x[1][y])
+        
+        return property_list   
+
+    def get_hypernyms(self, values, results, level = 3, language = 'en'): # error
+        """
+            get Wikidata hypernyms by hypernym level (recursive)
+                values: list - a given list
+                results: list - a list of hypernyms
+                level: int - the level of hypernym
+                return: list - a list of hypernyms
+        """
+
+        if (level == 0 or len(values) == 0):
+            results += values
+            results = [list(x) for x in set(tuple(x) for x in results)] # keep unique values
+            return results
+
+        terms = []
+        for v in values:
             try:
-                wdid = remove_emojis(x.attrib['id'])
-                title = remove_emojis(x.attrib['title'])
-                label = remove_emojis(x.attrib['label'])
+                root = self.get_wikidata_root(v[0])
+                claim_list = self.get_claim(root, v[0])
+
+                terms += self.get_value_by_property(claim_list, 'P31', language)
+                terms += self.get_value_by_property(claim_list, 'P279', language)
+            except: pass
+            
+        results += values
+        results += terms
+        results = [list(x) for x in set(tuple(x) for x in results)] # keep unique values
+
+        terms = set(tuple(x) for x in terms)
+        values = set(tuple(x) for x in values)
+        terms = terms - values
+        terms  = [list(x) for x in terms]
+
+        return self.get_hypernyms(terms, results, level - 1, language)
+    
+    def get_triple(self, word, level = 2):
+
+        """
+            English only
+        """
+        
+        triple_list = []
+        term_dict = self.get_item_by_title(word)
+        if not term_dict: return []
+    
+        instances = term_dict['instances']
+        subclasses = term_dict['subclasses']
+        parts = term_dict['parts']
+            
+        for i in instances: triple_list.append([term_dict['label'], 'instance_of', i[1]])
+        for s in subclasses: triple_list.append([term_dict['label'], 'subclass_of', s[1]])
+        for p in parts: triple_list.append([term_dict['label'], 'part_of', p[1]])
+
+        # get property data
+        triple_list += self.get_extend_triple(triple_list, instances, subclasses, parts, level)
+    
+        # filter triples
+        filtered_list = []
+        for t in triple_list:
+            flag = True
+            for f in filtered_list:
+                if (t[0] == f[0] and t[1] == f[1] and t[2] == f[2]):
+                    flag = False
+                    break
+            if (flag == True): filtered_list.append(t)
+
+        return filtered_list
+
+    def get_extend_triple(self, triple_list, instances, subclasses, parts, level):
+
+        """
+            English only
+        """
+
+        if (level == 0): return triple_list
+    
+        # get property data
+        id_list = [i[0] for i in instances]
+        id_list += [s[0] for s in subclasses]
+        id_list += [p[0] for p in parts]
+
+        for item in id_list:
+            term_dict = self.get_item_by_id(item)
+            try: 
+                instances = term_dict['instances']
+                for i in instances: triple_list.append([term_dict['label'], 'instance_of', i[1]])
+            except Exception as e:
+                #print('Error1 -- get_extend_triple: ', e)
+                instances = {}
+                pass
+
+            try:
+                subclasses = term_dict['subclasses']
+                for s in subclasses: triple_list.append([term_dict['label'], 'subclass_of', s[1]])
+            except Exception as e:
+                #print('Error2 -- get_extend_triple: ', e)
+                subclasses = {}
+                pass
+
+            try:
+                parts = term_dict['parts']
+                for p in parts: triple_list.append([term_dict['label'], 'part_of', p[1]])
+            except Exception as e:
+                #print('Error3 -- get_extend_triple: ', e)
+                parts = {}
+                pass
+
+        level = level - 1
+        #print(triple_list, instances, subclasses, parts, level)
+    
+        return self.get_extend_triple(triple_list, instances, subclasses, parts, level)
+        
+    def search_wikidata(self, term, search_type = 'property', limit = 50, data_format = 'xml'):
+
+        result_list = []
+        link = 'https://www.wikidata.org/w/api.php'
+        params = {
+            'action': 'wbsearchentities',
+            'language': 'en',
+            'format': data_format,
+            'type': search_type,
+            'limit': limit,
+            'search': term
+            }
+
+        print('params: ', params)
+        
+        #response = requests.get(link, params)
+        response = WikiRequest.get_data_by_link(link, params)
+        
+        for x in response.find('./search'):
+            try:
+                wdid = Helper.remove_emojis(x.attrib['id'])
+                title = Helper.remove_emojis(x.attrib['title'])
+                label = Helper.remove_emojis(x.attrib['label'])
                 object_type = ''
 
                 if ('Property:' in title):
-                    datatype = remove_emojis(x.attrib['datatype'])
+                    datatype = Helper.remove_emojis(x.attrib['datatype'])
                     object_type = 'property'
                 else:
                     datatype = 'wikibase-item'
                     object_type = 'item'
-                #text = remove_emojis(x.attrib['text'])
+                #text = Helper.remove_emojis(x.attrib['text'])
                 if (wdid != ''):
                     result_list.append({'wikidata_id': wdid, 'title': title , 'label': label, 'datatype': datatype, 'object_type': object_type})
             except:
                 pass
-            
-    return result_list
-
-
-def get_data_by_title(title, data_format = 'xml', language = 'en', timeout = 30):
-    """
-        get xml data by title from English Wikipedia
-            title: string - a Wikipedia's page title
-            language: string - a syntax for a language
-            return: string - xml data
-    """
-    
-    link = 'https://' + language + '.wikipedia.org/w/api.php'
-    params = {
-        'action': 'query',
-        'format': data_format,
-        'explaintext': True,
-        'prop': 'extracts|revisions|pageprops|templates|categories',
-        'rvprop': 'content',
-        'rvslots': 'main',
-        'titles': title,
-        }
-    response = requests.get(link, params, timeout = timeout)
-    if (data_format == 'xml'): root = ET.fromstring(response.text) # convert to xml
-    return root
-    
-
-def get_first_paragraph(title, language = 'en'):
-
-    #link = 'https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&exintro&explaintext&titles=' + urllib.parse.quote(title)
-    
-    link = 'https://' + language + '.wikipedia.org/w/api.php'
-    params = {
-        'action': 'query',
-        'format': 'json',
-        'explaintext': True,
-        'prop': 'extracts',
-        'exintro': True,
-        'titles': title,
-        }
-        
-    response = requests.get(link, params, timeout = 30)
-    
-    first_paragraph = ''
-    try:
-        data_dict = json.loads(response.text)
-        data_dict = data_dict['query']['pages']
-        key = next(iter(data_dict)) 
-        first_paragraph = data_dict[key]['extract']
-        
-    except Exception as e:
-        print('Error --- get_first_paragraph: ', e)
-        pass
-
-    return first_paragraph
-
-
-def get_triple(word, level = 2):
-
-    #print('word: ', word)
-
-    triple_list = []
-    term_dict = get_wikidata_item_by_title(word)
-    if not term_dict: return []
-    
-    instances = term_dict['instances']
-    subclasses = term_dict['subclasses']
-    parts = term_dict['parts']
-            
-    for i in instances: triple_list.append([term_dict['label'], 'instance_of', i[1]])
-    for s in subclasses: triple_list.append([term_dict['label'], 'subclass_of', s[1]])
-    for p in parts: triple_list.append([term_dict['label'], 'part_of', p[1]])
-
-    # get property data
-    triple_list += get_extend_triple(triple_list, instances, subclasses, parts, level)
-    
-    # filter triples
-    filtered_list = []
-    for t in triple_list:
-        flag = True
-        for f in filtered_list:
-            if (t[0] == f[0] and t[1] == f[1] and t[2] == f[2]):
-                flag = False
-                break
-        if (flag == True): filtered_list.append(t)
-
-    return filtered_list
-
-def get_extend_triple(triple_list, instances, subclasses, parts, level):
-
-    if (level == 0):
-        return triple_list
-    
-    # get property data
-    id_list = [i[0] for i in instances]
-    id_list += [s[0] for s in subclasses]
-    id_list += [p[0] for p in parts]
-
-    for item in id_list:
-        term_dict = get_wikidata_item_by_id(item)
-        try: 
-            instances = term_dict['instances']
-            for i in instances: triple_list.append([term_dict['label'], 'instance_of', i[1]])
-        except Exception as e:
-            #print('Error1 -- get_extend_triple: ', e)
-            instances = {}
-            pass
-
-        try:
-            subclasses = term_dict['subclasses']
-            for s in subclasses: triple_list.append([term_dict['label'], 'subclass_of', s[1]])
-        except Exception as e:
-            #print('Error2 -- get_extend_triple: ', e)
-            subclasses = {}
-            pass
-
-        try:
-            parts = term_dict['parts']
-            for p in parts: triple_list.append([term_dict['label'], 'part_of', p[1]])
-        except Exception as e:
-            #print('Error3 -- get_extend_triple: ', e)
-            parts = {}
-            pass
-
-    level = level - 1
-    #print(triple_list, instances, subclasses, parts, level)
-    
-    return get_extend_triple(triple_list, instances, subclasses, parts, level)
-    
-
-def get_wikidata_item_by_id(wikidata_id):
-
-    result_dict = {}
-
-    try:
-        wikidata_root = get_wikidata_root(wikidata_id)
-        description = get_description(wikidata_root)
-        #print('description: ', description)
-        #print('wikidata_id: ', wikidata_id)
-    
-        if ('disambiguation page' in description.lower() or 'wiki' in description.lower()): return {}
-
-        label = get_label(wikidata_root)
-        claims = get_claims(wikidata_root, wikidata_id)
-        instances = get_instance_of(claims)
-        subclasses = get_subclass_of(claims)
-        parts = get_part_of(claims)
-        aliases = get_alias(wikidata_root)
-
-        result_dict['wikidata_id'] = wikidata_id
-        result_dict['label'] = label
-        result_dict['description'] = description
-        result_dict['instances'] = instances
-        result_dict['subclasses'] = subclasses
-        result_dict['aliases'] = aliases
-        result_dict['parts'] = parts
-
-        # get the first paragraph & first sentence of Wikipedia
-        sitelink = get_sitelink(wikidata_root)
-        #wiki_root = get_data_by_title(sitelink)
-        first_paragraph = get_first_paragraph(sitelink)
-        sents = sent_detector.tokenize(first_paragraph)
-
-        #print('sents: ', sents)
-
-        result_dict['first_paragraph'] = ' '.join(s for s in sents)
-        result_dict['first_sentence'] = sents[0]
-        
-        
-    except Exception as e:
-        #print('Error --- get_wikidata_item_by_id: ', e)
-        pass
-    
-    return result_dict
-    
-
-def get_wikidata_item_by_title(title):
-
-    result_dict = {}
-    root = get_data_by_title(title)
-    
-    wikidata_id = get_wikidata_id(root)
-    if (wikidata_id == '' or wikidata_id == None): return {}
-
-    wikidata_root = get_wikidata_root(wikidata_id)
-    description = get_description(wikidata_root)
-    if ('disambiguation page' in description): return {}
-
-    label = get_label(wikidata_root)
-
-    claims = get_claims(wikidata_root, wikidata_id)
-    instances = get_instance_of(claims)
-    subclasses = get_subclass_of(claims)
-    parts = get_part_of(claims)
-
-    result_dict['wikidata_id'] = wikidata_id
-    result_dict['label'] = label
-    result_dict['description'] = description
-    result_dict['instances'] = instances
-    result_dict['subclasses'] = subclasses
-    result_dict['parts'] = parts
-    
-    return result_dict
-
-def get_wikidata_root(wikidata_id):
-    """
-        get xml data by if from Wikidata
-            wikidata_id: string - an identifier of an Wikidata item
-            return: return: string - xml data
-    """
-    
-    if (wikidata_id == None or wikidata_id == ''): return ''
-    
-    link = 'https://www.wikidata.org/w/api.php'
-    params = {
-        'action': 'wbgetentities',
-        'format': 'xml',
-        'ids': wikidata_id,
-        }
-    
-    root = get_data_by_link(link, params)
-    if (root is None): return ''
-    
-    return root
-
-def get_property_datatype(root):
-    """
-        get the datatype from xml data
-            root: string - xml data
-            return: string - a property datatype
-    """
-    
-    try:
-        for x in root.find('./entities'):
-            value = remove_emojis(x.attrib['datatype'])
-            if (value != ''): return value
-    except: pass
-    return ''               
-
-def get_sitelink_title(root, wiki_lang = 'enwiki'):
-    """
-        get a sitelink of a Wikipedia project from the Wikidata's xml data
-            root: string - xml data of Wikidata
-            wiki: string - a shortcut for a Wikipedia project
-            return: string - a sitelink
-    """
-
-    try:
-        for x in root.find('./entities/entity/sitelinks'):
-            if (x.attrib['site'] == wiki_lang):
-                value = remove_emojis(x.attrib['title'])
-                if (value != ''): return value
-    except: pass
-    return ''
-
-def get_wikidata_id(root):
-    """
-        get an identifier of an Wikidata item
-            root: string - xml data of Wikidata
-            return: string - WikidataID
-    """
-    
-    for node in root.find('./query/pages/page'):
-        if (node.tag == 'pageprops'): return node.attrib['wikibase_item']
-    return ''
-
-def get_page_content(root):
-    """
-        get page content from xml data
-            root: string - xml data
-            return: list - a list of text
-    """
-    
-    text_list = [x.text for x in root.iter('extract')]
-    return text_list[0] # first page content only
-    
-
-def get_content_by_section(text): # empty
-    """
-        split text into sections (level 2 and level 3)
-            text: string - a given text
-            return: dict - a dictionary
-    """
-    
-    return
-
-def get_sentence_list_baseline(text):
-    """
-        get sentence list from text
-            text: string - a given text
-            return: list - a list of sentences
-    """
-    
-    text = text.replace(u'\xa0', u' ')
-    text = text.replace(u'"', u'')
-
-    sen_list = text.split('.')    
-    sen_list = [x.strip() for x in sen_list if x.strip() != '']
-    sen_list = [x + '.' for x in sen_list]
-    return sen_list
-
-def extract_first_sentence_baseline(text):  # bad code
-
-    count = 0
-    first_sentence = ''
-    for w in text:
-        first_sentence += w
-
-        if (w == '('): count += 1
-        if (w == ')'): count -= 1
-
-        if (w == '.'):        
-            if (len(first_sentence.split()) > 10 and count == 0): break
-
-        #print('----', first_sentence)
-
-    return  first_sentence
-    
-def get_sentence_list_by_sentencizer(text):
-    """
-        get sentence list from text by spaCy sentencizer
-            text: string - a given text
-            return: list - a list of sentences
-    """
-    
-    text = text.replace(u'\xa0', u' ')
-    # text = text.replace(u'"', u'')
- 
-    doc = nlp(text)
-    sen_list = []
-    for sent in doc.sents:
-        sen_list.append(sent.text.strip())
-
-    sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x] 
-    return sen_list
-
-def extract_first_sentence_by_sentenizer(text):
-    return get_sentence_list_by_sentencizer(text)[0]
-
-def get_label_by_wikidata_id(wdid, data_format = 'xml'):
-    """
-        get label by a Wikidata indenfifier
-            wikidataID: string - an indenfifier of an Wikidata item
-            return: string - item label
-    """
-    
-    link = 'https://www.wikidata.org/w/api.php'
-    params = {
-        'action': 'wbgetentities',
-        'format': data_format,
-        'ids': wdid
-        }
-    
-    root = get_data_by_link(link, params)           
-    return get_label(root)
-
-
-def get_label(root, language = 'en'):
-    """
-        get label from xml data
-            root: string - xml data
-            language: string - a language syntax
-            return: string - label
-    """
-    
-    try:
-        for x in root.find('./entities/entity/labels'):
-            if (language == 'en'):
-                if (x.attrib['language'] == language + '-gb' or x.attrib['language'] == language):
-                    value = remove_emojis(x.attrib['value'])
-                    if (value != ''): return value
-            else:
-                if (x.attrib['language'] == language):
-                    value = remove_emojis(x.attrib['value'])
-                    if (value != ''): return value
-    except:
-        pass
-    return ''
-
-def get_description(root, language = 'en'):
-    """
-        get label from xml data
-            root: string - xml data
-            language: string - a language syntax
-            return: string - description
-    """
-
-    try:
-        for x in root.find('./entities/entity/descriptions'):
-            if (language == 'en'):
-                if (x.attrib['language'] == language + '-gb' or x.attrib['language'] == language):
-                    value = remove_emojis(x.attrib['value'])
-                    if (value != ''): return value
-            else:
-                if (x.attrib['language'] == language):
-                    value = remove_emojis(x.attrib['value'])
-                    if (value != ''): return value
-    except:
-        pass
-    return ''  
-       
-
-def get_values_by_property(claim_list, property_name, language = 'en'):
-    """
-        get values of a given property
-            claim_list: list - Wikidata claims
-            property_name: string - a Wikidata property name
-            return: list - a list of properties
-    """
-    
-    result_list = []
-    try:
-        for c in claim_list:
-            if (c[1][1] == property_name):
-                k = c[1][3] # wdid
-                root = get_wikidata_root(k)
-                label = get_label(root, language)
-                result_list.append([k, label])
-    except: pass
-
-    return result_list
-
-def get_instance_of(claim_list, language = 'en'):
-    """
-        get instance of a Wikidata item from its claims
-            claim_list: list - Wikidata claims
-            return: list - a list of instances
-    """
-    
-    result_list = []
-    try:
-        for c in claim_list:
-            if (c[1][1] == 'P31'):
-                k = c[1][3]
-                root = get_wikidata_root(k)
-                instance_name = get_label(root, language)
-                result_list.append([k, instance_name])
-    except: pass
-
-    return result_list
-    
-def get_subclass_of(claim_list, language = 'en'):
-    """
-        get instance of a Wikidata item from its claims
-            claim_list: list - Wikidata claims
-            return: list - a list of instances
-    """
-    
-    result_list = []
-    try:
-        for c in claim_list:
-            if (c[1][1] == 'P279'):
-                k = c[1][3]
-                root = get_wikidata_root(k)
-                instance_name = get_label(root, language)
-                result_list.append([k, instance_name])
-    except: pass
-
-    return result_list
-
-def get_part_of(claim_list, language = 'en'):
-    """
-        get parts of a Wikidata item from its claims
-            claim_list: list - Wikidata claims
-            return: list - a list of parts
-    """
-    
-    result_list = []
-    try:
-        for c in claim_list:
-            if (c[1][1] == 'P361'):
-                k = c[1][3]
-                root = get_wikidata_root(k)
-                instance_name = get_label(root, language)
-                result_list.append([k, instance_name])
-    except: pass
-
-    return result_list
-    
-
-def get_nationality(claim_list, language = 'en'):
-    """
-        get nationality of a Wikidata item from its claims
-            claim_list: list - Wikidata claims
-            return: list - a list of nationalities
-    """
-    
-    result_list = []
-    try:
-        for c in claim_list:
-            if (c[1][1] == 'P27'):
-                k = c[1][3]
-                root = get_wikidata_root(k)
-                country_name = get_label(root, language)
-                result_list.append([k, country_name])
-    except: pass
-
-    return result_list
-	
-def get_alias(root, language = 'en'):
-    """
-        get aliases of a Wikidata item from its claims
-            root: string - xml data
-            return: list - a list of aliases
-    """
-    
-    aliases = []
-    try:
-        for x in root.find('./entities/entity/aliases'):
-            
-            if (language == 'en'):
-                if (x.attrib['id'] == language + '-gb' or x.attrib['id'] == language):
-                    for t in x:
-                        value = remove_emojis(t.attrib['value'])
-                        if (value != ''): aliases.append(value)
-            else:
-                if (x.attrib['id'] == language):
-                    for t in x:
-                        value = remove_emojis(t.attrib['value'])
-                        if (value != ''): aliases.append(value)
-    except: pass
-    
-    return aliases
-        
-# get claims (Wikidata's statements) of a Wiki page   
-def get_claims(root, wikidataID):
-
-    #print('root, wikidataID:', root, wikidataID)
-
-    claim_list = [] # statement list
-
-    if (root == '' or root is None):
-        return claim_list
-
-    if (wikidataID == '' or wikidataID is None):
-        return claim_list
-
-    s = wikidataID # s: subject (item identifier, wikidataID)
-    p = ob = pt = pv = q = qt = qv = ''
-    # p: predicate (property), ob: object (property value identifier)
-    # pt: object type (property value type), pv: object value (property value)
-    # q: qualifier, qt: qualifier type, qv: qualifier value
-
-    # loop each predicate (property)
-    for predicate in root.find('./entities/entity/claims'):        
-        #print('************************')
-        #print('Property: ', predicate.attrib['id'])
-        p = remove_emojis(predicate.attrib['id']) # predicate (property)
-        for claim in predicate.iter('claim'):
-            pt = remove_emojis(claim[0].attrib['datatype']) # property type
-            #print('+', pt)
-            for obj in claim.find('mainsnak'):
-                try:
-                    try:
-                        # obj.attrib['value'].encode('unicode-escape').decode('utf-8')
-                        pv = remove_emojis(obj.attrib['value'])
-                    except Exception as e:
-                        #print('Error:', e)
-                        pass
-                    if (pv != ''):
-                        continue
-                    objdict = obj[0].attrib
-
-                    if ('id' in objdict):
-                        #print('--', objdict['id'])
-                        ob = remove_emojis(objdict['id']) # qualifier
-                    elif ('time' in objdict):
-                        #print('--', objdict['time'])
-                        pv = remove_emojis(objdict['time']) # time
-                    elif ('amount' in objdict):
-                        #print('--', objdict['amount'])
-                        pv = remove_emojis(objdict['amount']) # amount
-                    # capture other data types (globle coordinate, etc)
-                    # ...
-                    else:
-                        pass
-                        #print('--', 'empty')
-                except Exception as e:
-                    pass
-                    #print('Error:', e) 
-			
-            # check the number of qualifiers
-            qual_properties = [t for t in claim.findall('qualifiers/property')]
-            if (len(qual_properties) == 0):
-                if (pt != 'wikibase-item'):
-                    r1 = [s, p, pt, pv]
-                    claim_list.append(['r1', r1]) # WST-1 statement
-                else:
-                    r2 = [s, p, pt, ob]
-                    claim_list.append(['r2', r2]) # WST-2 statement
-            else:
-                if (pv != ''):
-                    r3 = [s, p, pt, pv] # WST3-a
-                else:
-                    r3 = [s, p, pt, ob] # WST3-b 
-                try:
-                    for x in claim.find('qualifiers'):
-                        #print('----', x.attrib['id'], x.tag)
-                        q = remove_emojis(x.attrib['id']) # qualifier identifier
-                        qt = remove_emojis(x[0].attrib['datatype']) # qualifier data type
-                        subr = [q, qt]
-                        children = x.getchildren()
-                        for y in children:
-                            for z in y.find('datavalue'):
-                                qv = '' # qualifier value
-                                if ('id' in z.attrib):
-                                    #print('--------', z.attrib['id'])
-                                    qv = remove_emojis(z.attrib['id']) # qualifier value
-                                elif ('time' in z.attrib):
-                                    #print('--------', z.attrib['time'])
-                                    qv = remove_emojis(z.attrib['time']) # value
-                                elif ('amount' in z.attrib):
-                                    #print('--------', z.attrib['amount'])
-                                    qv = remove_emojis(z.attrib['amount']) # value
-                                # capture other data types (globle coordinate, etc)
-                                # ...   
-                                else:
-                                    #print('--------', 'empty')
-                                    qv = '' # set to empty
-                                if (qv != ''):
-                                    subr.append(qv)
-                                    r3.append(subr) # add a qualifier value
-                                    qv = '' # set to empty for new iterator
-                except Exception as e:
-                    pass
-                    #print('Error: ', e)
                 
-                if (len(r3) > 4):
-                    claim_list.append(['r3', r3]) # WST-3 statement
-                else:
-                    if (pt != 'wikibase-item'):
-                        claim_list.append(['r1', r3]) # WST-1 statement
-                    else:
-                        claim_list.append(['r2', r3]) # WST-2 statement
-            ob = pv = '' # reset values (important)
-        #print('************************')    
+        return result_list
+# -----------------------------------------------------------
 
-    '''for c in claim_list:
-        print('-----------------')
-        print(c)'''
+# class Page ------------------------------------------------
+class Page():
+    def __init__(self, idx = 0, namespace = '', input_title = '', title = '', content = '', first_paragraph = '', \
+                 first_sentence = '', categories = [], templates = []):
 
-    return claim_list     
+        self.idx = idx
+        self.namespace = namespace
+        self.input_title = input_title
+        self.title = title
+        self.content = content
+        self.first_paragraph = first_paragraph
+        self.first_sentence = first_sentence
+        self.categories = categories
+        self.templates = templates
+        
+# -----------------------------------------------------------
 
-def filter_claim_by_type(claim_list, claim_type = 'r1'):
+# class Wikipedia -------------------------------------------
+class Wikipedia():
 
-    """
-        filter claims by types
-            claim_list: list - a list of claims
-            claim_type: string - claim type (r1, r2, r3)
-            return: list - a filtered claim lists
-    """
-    
-    result_list = []
-    for x in claim_list:
-        if (x[0] == claim_type): result_list.append(x)
+    def get_page(self, title, data_format = 'json', language = 'en', redirect = True, return_type = 'dict',  timeout = 45):
+
+        response = self.get_data_by_title(title, data_format, language, redirect, timeout)
+        
+        page_dict = {}
+        page_dict['idx'] = self.get_idx(response, data_format)
+        page_dict['namespace'] = self.get_namespace(response, data_format)
+        page_dict['input_title'] = title # in case of redirects
+        page_dict['title'] = self.get_title(response, data_format)
+        page_dict['content'] = self.get_page_content(response, data_format)
+        page_dict['first_paragraph'] = self.get_first_paragraph(page_dict['content'])
+        page_dict['first_sentence'] = self.get_first_sentence(page_dict['first_paragraph'])
+        page_dict['categories'] = self.get_category(response, data_format)
+        page_dict['templates'] = self.get_template(response, data_format)
+
+        if (return_type == 'class'):
+            return Page(page_dict['idx'], page_dict['namespace'], page_dict['input_title'], page_dict['title'], \
+                        page_dict['content'], page_dict['first_paragraph'], page_dict['first_sentence'], \
+                        page_dict['categories'], page_dict['templates'])
+        
+        return page_dict
+
+    def get_title(self, data, data_format):
+        """
+            get categories
+                data:
+                return: list
+        """
+        
+        title = ''
+        if (data_format == 'xml'):
+            for node in data.find('./query/pages/page'):
+                title = node.attrib['title']
+        elif(data_format == 'json'):
+            try:
+                data_dict = data['query']['pages']
+                key = next(iter(data_dict))
+                title = data_dict[key]['title']
+            except Exception as e:
+                #print('Error --- get_title: ', e)
+                pass
             
-    return result_list     
-
-def get_property_by_object_id(object_id, claim_list):
-    """
-        get properies by an object id
-            object_id: string - an identifier of an object
-            claims: list - a list of claims
-            return: list - a property list
-    """
-    property_list = []
-    for x in claim_list:
-        if (x[1][2] == object_id):
-            for y in range(4, len(x[1])):
-                property_list.append(x[1][y])
+        return title
     
-    return property_list   
+    def get_namespace(self, data, data_format):
+        """
+            get categories
+                data:
+                return: list
+        """
+        
+        ns = ''
+        if (data_format == 'xml'):
+            for node in data.find('./query/pages/page'):
+                ns = node.attrib['ns']
+        elif(data_format == 'json'):
+            try:
+                data_dict = data['query']['pages']
+                key = next(iter(data_dict))
+                ns = data_dict[key]['ns']
+            except Exception as e:
+                #print('Error --- get_namespace: ', e)
+                pass
+            
+        return ns
 
-def get_hypernyms(values, results, level = 3, language = 'en'):
-    """
-        get Wikidata hypernyms by hypernym level (recursive)
-            values: list - a given list
-            results: list - a list of hypernyms
-            level: int - the level of hypernym
-            return: list - a list of hypernyms
-    """
+    def get_idx(self, data, data_format):
+        """
+            get categories
+                data:
+                return: list
+        """
+        
+        idx = ''
+        if (data_format == 'xml'):
+            for node in data.find('./query/pages/page'):
+                idx = node.attrib['pageid']
+        elif(data_format == 'json'):
+            try:
+                data_dict = data['query']['pages']
+                key = next(iter(data_dict))
+                idx = data_dict[key]['pageid']
+            except Exception as e:
+                #print('Error --- get_idx: ', e)
+                pass
+            
+        return idx
+    
 
-    if (level == 0 or len(values) == 0):
-        results += values
-        results = [list(x) for x in set(tuple(x) for x in results)] # keep unique values
-        return results
+    def get_category(self, data, data_format):
+        """
+            get categories
+                data:
+                return: list
+        """
+        
+        cat_list = []
+        if (data_format == 'xml'):
+            for node in data.find('./query/pages/page/categories/cl'):
+                cat_list.append(node.text)
+        elif(data_format == 'json'):
+            try:
+                data_dict = data['query']['pages']
+                key = next(iter(data_dict))
+                data_list = data_dict[key]['categories']
 
-    terms = []
-    for v in values:
+                for item_dict in data_list:
+                    if (item_dict['ns'] != 14): continue
+                    cat_list.append(item_dict['title'])
+                    
+            except Exception as e:
+                #print('Error --- get_category: ', e)
+                pass
+
+        return cat_list
+
+    def get_template(self, data, data_format):
+        """
+            get categories
+                data:
+                return: list
+        """
+        
+        temp_list = []
+        if (data_format == 'xml'):
+            for node in data.find('./query/pages/page/templates/tl'):
+                temp_list.append(node.text)
+        elif(data_format == 'json'):
+            try:
+                data_dict = data['query']['pages']
+                key = next(iter(data_dict))
+                data_list = data_dict[key]['templates']
+
+                for item_dict in data_list:
+                    if (item_dict['ns'] != 10): continue
+                    temp_list.append(item_dict['title'])
+                    
+            except Exception as e:
+                #print('Error --- get_template: ', e)
+                pass
+
+        #cat_list = [Helper.remove_emojis(c) for c in cat_list]
+        return temp_list
+        
+
+    def get_data_by_title(self, title, data_format = 'xml', language = 'en', redirect = True, timeout = 45):
+        """
+            get data by title and language
+                title: string - a Wikipedia's page title
+                language: string - a syntax for a language
+                return: string 
+        """
+    
+        link = 'https://' + language + '.wikipedia.org/w/api.php'
+        params = {
+            'action': 'query',
+            'format': data_format,
+            'explaintext': True,
+            'prop': 'extracts|revisions|pageprops|templates|categories',
+            '#exintro': True,
+            'rvprop': 'content',
+            'rvslots': 'main',
+            'titles': title,
+            'clshow': '!hidden' # not show hidden categories
+            }
+        if (redirect == True): params['redirects'] = ''
+
+        #print(Helper.create_link(link, params))
+        response = WikiRequest.get_data_by_link(link, params, data_format, timeout)
+        return response
+    
+    def get_first_paragraph(self, content):
+        """
+            get first paragraph
+                content: page content - string
+                return: string 
+        """
+
+        first_paragraph = ''
         try:
-            root = get_wikidata_root(v[0])
-            claim_list = get_claim(root, v[0])
+            first_paragraph = content[0:content.index('==')].strip('\n')
+        except:
+            pass
 
-            terms += get_values_by_property(claim_list, 'P31', language)
-            terms += get_values_by_property(claim_list, 'P279', language)
-        except: pass
+        return first_paragraph
+    
+    def get_page_content(self, data, data_format):
+        """
+            get page content from xml data
+                root: string - xml data
+                return: list - a list of text
+        """
+
+        content = ''
+        if (data_format  == 'xml'):
+            for node in data.find('./query/pages/page'):
+                if (node.tag == 'extract'):
+                    content = node.text
+                    break
+        elif(data_format == 'json'):
+            try:
+                data_dict = data['query']['pages']
+                key = next(iter(data_dict))
+                content = data_dict[key]['extract']
         
-    results += values
-    results += terms
-    results = [list(x) for x in set(tuple(x) for x in results)] # keep unique values
+            except Exception as e:
+                #print('Error --- get_page_content: ', e)
+                pass
 
-    terms = set(tuple(x) for x in terms)
-    values = set(tuple(x) for x in values)
-    terms = terms - values
-    terms  = [list(x) for x in terms]
-
-    return get_hypernyms(terms, results, level - 1, language)
+        content = Helper.remove_emojis(content)
+        return content
     
-'''# get wikidata item
-def get_wikidata_item_by_title_by_name(item_name, file_name, depth):
-
-    item_name = item_name.replace(' ','_') # format page name
-    root = ''
-    wikidata_id = ''
+    def get_sentence_list(self, text):
+        """
+            get sentence list from text by spaCy sentencizer
+                text: string - a given text
+                return: list - a list of sentences
+        """
     
-    try:
-        root = get_data_by_title(item_name)
-        wikidata_id = get_wikidata_id(root)
-    except Exception as e:
-        #print('Error:', e)
-        return []
+        text = Helper.remove_emojis(text)    
+        doc = nlp(text)
+        sen_list = []
+        for sent in doc.sents:
+            sen_list.append(sent.text.strip())
+        sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x]
+        #sen_list = sent_detector.tokenize(text)
+    
+        return sen_list
 
-    if (wikidata_id == ''):
-        return []
+    def get_first_sentence(self, text):
 
-    if (check_exist_in_item_list(wikidata_id) == True):
+        try:
+            return self.get_sentence_list(text)[0]
+        except:
+            return ''
+
+    def get_content_by_section(self, content):
+        """
+            split text into sections
+                content: string - a given v
+                return: dict - a dictionary
+        """
+    
         return
-
-    if (depth == 0):
-        return []
-
-    #print(wikidata_id)
-    wikidata_root = get_wikidata_root(wikidata_id)
-    xmlstr = ET.tostring(wikidata_root, encoding='unicode', method='xml')
-
-    items = []
-    items = match_wikidata_item(xmlstr)
     
-    if ('Could not find an entity' in xmlstr or 'missing=""' in xmlstr):
-        return
+    def search_wikipedia(self, term, limit = 1, language = 'en', data_format = 'json', key_len = 2, timeout = 45):
 
-    label = description = ''
-    alias = claims = []
+        result_term = ''
+        suggestion = False
 
-    try:
-        label = get_label(wikidata_root)
-        description = get_description(wikidata_root)
-        alias = get_alias(wikidata_root)
-        claims = get_claims(wikidata_root, wikidata_id)
-    except Exception as e:
-        #print('Error:', e)
-        return []
+        if (len(term) < key_len): return {'value': result_term, 'suggestion': suggestion}
         
-    write_to_text_file('item_id_list.txt', wikidata_id)
-    write_wikidata_to_csv_file(file_name, wikidata_id, label, description, alias, claims)
-	
-    for i in items:
-        get_wikidata_item_by_title_by_id(i, file_name, depth-1)
+        link = 'https://' +  language + '.wikipedia.org/w/api.php'
+        params = {
+            'action': 'query',
+            'list': 'search',
+            'srsearch': term,
+            'srlimit': limit,
+            'srprop': 'size',
+            'formatversion': 2,
+            'format': data_format
+            }
 
-# get wikidata item
-def get_wikidata_item_by_title_by_id(wikidata_id, file_name, depth):
-
-    if (check_exist_in_item_list(wikidata_id) == True):
-        return []
-
-    if (depth == 0):
-        return []
-
-    wikidata_root = get_wikidata_root(wikidata_id)
-    xmlstr = ET.tostring(wikidata_root, encoding='unicode', method='xml')
-
-    items = []
-    items = match_wikidata_item(xmlstr)
-    
-    if ('Could not find an entity' in xmlstr or 'missing=""' in xmlstr):
-        return []
-
-    label = description = ''
-    alias = claims = []
-
-    try:
-        label = get_label(wikidata_root)
-        description = get_description(wikidata_root)
-        alias = get_alias(wikidata_root)
-        claims = get_claims(wikidata_root, wikidata_id)
+        #response = requests.get(link, params)
+        response = WikiRequest.get_data_by_link(link, params, data_format, timeout)
         
-    except Exception as e:
-        #print('Error:', e)
-        return []
+        if (data_format == 'json'):
+            try:
+                result_term = response['query']['searchinfo']['suggestion']
+                suggestion = True
+                if (term.strip().lower() == result_term.strip().lower()): result_term = term
+                
+            except:
+                try:
+                    result_term = response['query']['search'][0]['title']
+                except:
+                    #print('Error1 --- search_wikipedia: ', e)
+                    pass
+                #print('Error2 --- search_wikipedia: ', e)
+                pass
+        elif (data_format == 'xml'):
+            # define later...
+            pass
 
-    write_to_text_file('item_id_list.txt', wikidata_id)
-    write_wikidata_to_csv_file(file_name, wikidata_id, label, description, alias, claims)
-    for i in items:
-        get_wikidata_item_by_title_by_id(i, file_name, depth-1)'''
+        return {'value': result_term, 'suggestion': suggestion}
 
-#.....................................................................
+# -----------------------------------------------------------
+
+# class WikidataQuery -------------------------------------------
+class WikidataQuery():
+    def get_data_by_sparql_query(query, data_format = 'json', timeout = 45):
+        """
+            get the data from Wikidata server by SPARQL queries
+                query: string - a SPARQL query
+                data_format: string - the format of return data
+                return: list - a list of results
+        """
+
+        link = 'https://query.wikidata.org/bigdata/namespace/wdq/sparql'
+        params = {
+            'query': query,
+            'format': data_format
+            }
+        
+        #response = requests.get(link, params)
+        response = WikiRequest.get_data_by_link(link, params, data_format, timeout)
+        
+        result_list = []
+        if (data_format == 'xml'):
+            '''
+            for x in root.find('./results/result'):
+                try:
+                    name = Helper.remove_emojis(x.attrib['name'])
+                    value = Helper.remove_emojis(x.find('uri').value)
+                except:
+                    pass
+            '''
+            pass
+        
+        elif(data_format == 'json'):
+            #root = json.loads(response.text)
+            bindings = response['results']['bindings']
+            for binding in bindings:
+                result_list.append(binding)
+
+        return result_list
+# -----------------------------------------------------------
+
+# -----------------------------------------------------------
 if __name__ == "__main__":
-    #print("Hello, this is Wiki Core library!")
-    #print(get_wikidata_item_by_id('Q123'))
+    wiki = Wikidata()
+    item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'class')
 
-    '''root = get_data_by_title('science')
-    text = get_page_content(root)
-    print('page content: ', text)
-    first_para = extract_first_sentence_baseline(text)
-    print('first_para: ', first_para)'''
+    
+    print('item: ', item.claims)
 
-    #item = get_wikidata_item_by_id('Q123')
-    #print(item)
 
-    results = search_wikidata('science')
-    print('results: ', results)
+    
 
 
