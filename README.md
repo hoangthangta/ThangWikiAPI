@@ -131,7 +131,7 @@ page:  {'value': 'science', 'suggestion': True} # correct "sciernce" --> "scienc
 ```
 
 ## Cross project's examples
-### Get both Wikidata and Wikipedia by sitelinks or interwiki links
+### Get data from both Wikidata and Wikipedia by sitelink or interwiki link
 Code:
 ```
 from wiki_core import *
