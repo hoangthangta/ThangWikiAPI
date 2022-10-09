@@ -1,5 +1,5 @@
 # WikiAPICore
-This is a library used to access Wikipedia &amp; Wikidata APIs where you can get Wikipedia pages and Wikidata items. We will support SPARQL in Wikidata server soon.
+This is a library used to access Wikimedia APIs (https://www.mediawiki.org/wiki/API:Main_page) where you can get Wikipedia pages and Wikidata items. We will support SPARQL queries on Wikidata soon.
 
 ## Dependencies
 * Python >= 3.6
