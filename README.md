@@ -12,3 +12,6 @@ Updating...
 ## Wikidata: Examples
 
 Updating...
+
+# Contact
+* Email: tahoangthang@gmail.com
