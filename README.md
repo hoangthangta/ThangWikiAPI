@@ -54,6 +54,26 @@ item:  Q472550
 item:  Member of the National Assembly of Hungary
 ```
 
+### Search by Wikidata
+
+Code:
+```
+wiki = Wikidata()
+
+result = wiki.search_wikidata('science', search_type = 'property', limit = 5) # seach by property ([https://www.wikidata.org/wiki/Wikidata:List_of_properties](https://www.wikidata.org/wiki/Wikidata:Glossary#Property))
+print('result: ', result)
+
+result = wiki.search_wikidata('science', search_type = 'item', limit = 5) # search by Wikidata identifier (item, https://www.wikidata.org/wiki/Wikidata:Glossary#Item)
+print('result: ', result)
+```
+
+Result:
+```
+result:  [{'wikidata_id': 'P2579', 'title': 'Property:P2579', 'label': 'studied by', 'datatype': 'wikibase-item', 'object_type': 'property'}, {'wikidata_id': 'P10376', 'title': 'Property:P10376', 'label': 'ScienceDirect topic ID', 'datatype': 'external-id', 'object_type': 'property'}, {'wikidata_id': 'P8694', 'title': 'Property:P8694', 'label': 'Science Museum Group ID', 'datatype': 'external-id', 'object_type': 'property'}, {'wikidata_id': 'P9268', 'title': 'Property:P9268', 'label': 'Science Magazine author ID', 'datatype': 'external-id', 'object_type': 'property'}, {'wikidata_id': 'P4389', 'title': 'Property:P4389', 'label': 'Science Museum people ID', 'datatype': 'external-id', 'object_type': 'property'}]
+
+result:  [{'wikidata_id': 'Q336', 'title': 'Q336', 'label': 'science', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q192864', 'title': 'Q192864', 'label': 'Science', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q845056', 'title': 'Q845056', 'label': 'Science', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q24925', 'title': 'Q24925', 'label': 'science fiction', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q21198', 'title': 'Q21198', 'label': 'computer science', 'datatype': 'wikibase-item', 'object_type': 'item'}]
+```
+
 ## Wikidata: Examples
 
 Updating...
