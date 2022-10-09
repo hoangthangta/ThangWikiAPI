@@ -98,6 +98,7 @@ triples:  [['science', 'instance_of', 'academic discipline'], ['science', 'insta
 ### Get page by title
 Code:
 ```
+from wiki_core import *
 wiki = Wikipedia()
 page = wiki.get_page('György Gyula Zagyva', return_type = 'class') # class return
 print('page: ', vars(page))
