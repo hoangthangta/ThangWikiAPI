@@ -12,6 +12,8 @@ This is a library used to access Wikipedia &amp; Wikidata APIs where you can get
 
 Code:
 ```
+from wiki_core import *
+
 wiki = Wikidata()
 item = wiki.get_item_by_id('Q472550', return_type = 'class')
 print('item: ', vars(item)) # print class structure
@@ -35,6 +37,8 @@ description:  Member of the National Assembly of Hungary
 
 Code:
 ```
+from wiki_core import *
+
 wiki = Wikidata()
 item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'class')
 print('item: ', vars(item)) # print class structure
@@ -58,6 +62,8 @@ item:  Member of the National Assembly of Hungary
 
 Code:
 ```
+from wiki_core import *
+
 wiki = Wikidata()
 
 result = wiki.search_wikidata('science', search_type = 'property', limit = 5) # seach by property ([https://www.wikidata.org/wiki/Wikidata:List_of_properties](https://www.wikidata.org/wiki/Wikidata:Glossary#Property))
