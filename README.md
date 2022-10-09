@@ -63,7 +63,6 @@ item:  Member of the National Assembly of Hungary
 Code:
 ```
 from wiki_core import *
-
 wiki = Wikidata()
 
 result = wiki.search_wikidata('science', search_type = 'property', limit = 5) # seach by property ([https://www.wikidata.org/wiki/Wikidata:List_of_properties](https://www.wikidata.org/wiki/Wikidata:Glossary#Property))
@@ -80,9 +79,23 @@ result:  [{'wikidata_id': 'P2579', 'title': 'Property:P2579', 'label': 'studied 
 result:  [{'wikidata_id': 'Q336', 'title': 'Q336', 'label': 'science', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q192864', 'title': 'Q192864', 'label': 'Science', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q845056', 'title': 'Q845056', 'label': 'Science', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q24925', 'title': 'Q24925', 'label': 'science fiction', 'datatype': 'wikibase-item', 'object_type': 'item'}, {'wikidata_id': 'Q21198', 'title': 'Q21198', 'label': 'computer science', 'datatype': 'wikibase-item', 'object_type': 'item'}]
 ```
 
+### Get triples
+Code:
+```
+from wiki_core import *
+wiki = Wikidata()
+triples = wiki.get_triple('science', level = 2)
+print('triples: ', triples)
+```
+
+Result:
+```
+triples:  [['science', 'instance_of', 'academic discipline'], ['science', 'instance_of', 'activity'], ['science', 'subclass_of', 'knowledge system'], ['academic discipline', 'instance_of', 'classification system of knowledge'], ['academic discipline', 'subclass_of', 'specialty'], ['activity', 'subclass_of', 'series'], ['activity', 'subclass_of', 'occurrence'], ['knowledge system', 'subclass_of', 'system'], ['knowledge system', 'subclass_of', 'set'], ['knowledge system', 'subclass_of', 'knowledge'], ['system', 'instance_of', 'type of object'], ['system', 'subclass_of', 'collective entity'], ['set', 'subclass_of', 'collective entity'], ['knowledge', 'instance_of', 'philosophical concept'], ['knowledge', 'instance_of', 'mental state'], ['knowledge', 'subclass_of', 'memory']]
+```
+
 ## Wikidata: Examples
 
-Updating...
+###
 
 # Contact
 * Email: tahoangthang@gmail.com
