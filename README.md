@@ -27,7 +27,7 @@ print('description: ', item['description']) # print description
 ```
 
 Note:
-* Use parameter *language* to define your own language project, e.g *language = 'fr'*.
+* Use parameter *language* to define your own language project, e.g. *language = 'fr'*.
 
 Result:
 ```
@@ -53,6 +53,9 @@ print('item: ', item) # print dict
 print('wikidata_id: ', item['wikidata_id']) # print wikidata_id
 print('description: ', item['description']) # print description
 ```
+
+Note:
+* Use parameter *language* to define your own language project, e.g. *language = 'fr'*.
 
 Result:
 ```
@@ -112,6 +115,9 @@ page = wiki.get_page('György Gyula Zagyva', return_type = 'dict') # dict return
 print('page: ', page)
 print('categories: ', page['categories'])
 ```
+
+Note:
+* Use parameter *language* to define your own language project, e.g. *language = 'fr'*.
 
 Result:
 ```
