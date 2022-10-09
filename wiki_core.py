@@ -13,20 +13,19 @@ import sys
 sys.setrecursionlimit(3000)
 non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), '')
 
-
-#import nltk
-#sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+import nltk
+sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
 
 import spacy
 from spacy import displacy
 nlp = spacy.load('en_core_web_md')
-nlp.add_pipe('sentencizer', before='parser')
+nlp.add_pipe('sentencizer', before='parser') # for spaCy 3.x.x
 
-from datetime import *
+'''from datetime import *
 from dateutil.easter import *
 from dateutil.parser import *
 from dateutil.relativedelta import *
-from dateutil.rrule import *
+from dateutil.rrule import *'''
 from read_write_file import *
 
 # class Helper --------------------------------------------------
@@ -34,6 +33,12 @@ class Helper():
 
     @staticmethod
     def create_link(link, params):
+        """
+            create full link
+                link: string - link without parameters
+                params: dict - parameter dict
+                return: string - full link created
+        """
 
         param_string = ''
         for k, v in params.items():
@@ -49,6 +54,8 @@ class Helper():
     def remove_emojis(text):
         """
             remove emojis from Karim Omaya (stackoverflow.com)
+                text: string - input
+                return: string - text without emojis
         """
         emoj = re.compile('['
             u'\U0001F600-\U0001F64F'  # emoticons
@@ -72,9 +79,12 @@ class Helper():
                           ']+', re.UNICODE)
         return re.sub(emoj, '', text)
 
-    '''@staticmethod
+    @staticmethod
     def cls():
-        os.system('cls' if os.name == 'nt' else 'clear')'''
+        """
+            clear console screen
+        """
+        os.system('cls' if os.name == 'nt' else 'clear')
 # -----------------------------------------------------------
 
 # class WikiRequest --------------------------------------------
@@ -123,7 +133,11 @@ class Wikidata():
 
     def get_item_by_id(self, wikidata_id, language = 'en', return_type = 'dict'):
         """
-            get English texts
+            get a Wikidata item by id (e.g. Q123)
+                wikidata_id: string - Wikidata identifier
+                language: string - language needed to return
+                return_type: string - type of return data
+                return: dict or class - return data   
         """
 
         item_dict = {}
@@ -174,6 +188,14 @@ class Wikidata():
         return item_dict
 
     def get_item_by_title(self, title, title_language = 'en', language = 'en', return_type = 'dict'):
+        """
+            get a Wikidata item by title (e.g. Science)
+                title: string - page title
+                title_language: string - language project (e.g. en = English Wikipedia, fr = Frech Wikipedia, etc.)
+                language: string - language needed to return
+                return_type: string - type of return data
+                return: dict or class - return data   
+        """
 
         item_dict = {}
         try:
@@ -229,9 +251,9 @@ class Wikidata():
 
     def get_wikidata_root(self, wikidata_id):
         """
-            get xml data by if from Wikidata
-                wikidata_id: string - an identifier of an Wikidata item
-                return: return: string - xml data
+            get XML data by if from Wikidata
+                wikidata_id: string - Wikidata identifier
+                return: return: string - XML data
         """
     
         if (wikidata_id == None or wikidata_id == ''): return ''
@@ -250,8 +272,8 @@ class Wikidata():
 
     def get_property_datatype(self, root):
         """
-            get the datatype from xml data
-                root: string - xml data
+            get the datatype from XML data
+                root: string - XML data
                 return: string - a property datatype
         """
     
@@ -264,8 +286,8 @@ class Wikidata():
 
     def get_sitelink(self, root, language = 'en'):
         """
-            get a sitelink of a Wikipedia project from the Wikidata's xml data
-                root: string - xml data of Wikidata
+            get a sitelink of a Wikipedia project from the Wikidata's XML data
+                root: string - XML data of Wikidata
                 wiki: string - a shortcut for a Wikipedia project
                 return: string - a sitelink
         """
@@ -281,7 +303,7 @@ class Wikidata():
     def get_id(self, root):
         """
             get an identifier of an Wikidata item
-                root: string - xml data of Wikidata
+                root: string - XML data of Wikidata
                 return: string - wikidata_id
         """
     
@@ -292,7 +314,7 @@ class Wikidata():
     def get_label_by_id(self, wikidata_id, data_format = 'xml'):
         """
             get label by a Wikidata indenfifier
-                wikidata_id: string - an indenfifier of an Wikidata item
+                wikidata_id: string - Wikidata identifier
                 return: string - item label
         """
     
@@ -309,8 +331,8 @@ class Wikidata():
 
     def get_label(self, root, language = 'en'):
         """
-            get label from xml data
-                root: string - xml data
+            get label from XML data
+                root: string - XML data
                 language: string - a language syntax
                 return: string - label
         """
@@ -331,8 +353,8 @@ class Wikidata():
 
     def get_description(self, root, language = 'en'):
         """
-            get label from xml data
-                root: string - xml data
+            get label from XML data
+                root: string - XML data
                 language: string - a language syntax
                 return: string - description
         """
@@ -475,6 +497,12 @@ class Wikidata():
         return aliases
         
     def get_claims(self, root, wikidata_id):
+        """
+            get all claims (or sometimes called statements) of a Wikidata item
+                root: XML data
+                wikidata_id: Wikidata identifier
+                return: list - a list of claims
+        """
 
         claim_list = [] # statement list
         if (root == '' or root is None): return claim_list
@@ -586,7 +614,7 @@ class Wikidata():
         """
             filter claims by types
                 claim_list: list - a list of claims
-                claim_type: string - claim type (r1, r2, r3)
+                claim_type: string - claim type (r1 = relation type 1, r2 = relation type 2, r3 =  relation type 3)
                 return: list - a filtered claim lists
         """
         
@@ -808,9 +836,10 @@ class Wikipedia():
 
     def get_title(self, data, data_format):
         """
-            get categories
-                data:
-                return: list
+            get title
+                data: string - data
+                data_format: string - XML or JSON
+                return: string - title
         """
         
         title = ''
@@ -830,9 +859,10 @@ class Wikipedia():
     
     def get_namespace(self, data, data_format):
         """
-            get categories
-                data:
-                return: list
+            get namespace
+                data: string - data
+                data_format: string - XML or JSON
+                return: int - namespace (https://en.wikipedia.org/wiki/Wikipedia:Namespace)
         """
         
         ns = ''
@@ -852,9 +882,10 @@ class Wikipedia():
 
     def get_idx(self, data, data_format):
         """
-            get categories
-                data:
-                return: list
+            get Wikidata identifier
+                data: string - data
+                data_format: string - XML or JSON
+                return: string - Wikidata identifier
         """
         
         idx = ''
@@ -876,8 +907,9 @@ class Wikipedia():
     def get_category(self, data, data_format):
         """
             get categories
-                data:
-                return: list
+                data: string - data
+                data_format: string - XML or JSON
+                return: list - list of categories
         """
         
         cat_list = []
@@ -902,9 +934,10 @@ class Wikipedia():
 
     def get_template(self, data, data_format):
         """
-            get categories
-                data:
-                return: list
+            get templates
+                data: string - data
+                data_format: string - XML or JSON
+                return: list - list of templates
         """
         
         temp_list = []
@@ -932,9 +965,9 @@ class Wikipedia():
     def get_data_by_title(self, title, data_format = 'xml', language = 'en', redirect = True, timeout = 45):
         """
             get data by title and language
-                title: string - a Wikipedia's page title
-                language: string - a syntax for a language
-                return: string 
+                title: string - page title
+                language: string - language
+                return: string - return data
         """
     
         link = 'https://' + language + '.wikipedia.org/w/api.php'
@@ -972,9 +1005,10 @@ class Wikipedia():
     
     def get_page_content(self, data, data_format):
         """
-            get page content from xml data
-                root: string - xml data
-                return: list - a list of text
+            get page content
+                data: string - data
+                data_format: string - XML or JSON
+                return: string - content
         """
 
         content = ''
@@ -996,20 +1030,23 @@ class Wikipedia():
         content = Helper.remove_emojis(content)
         return content
     
-    def get_sentence_list(self, text):
+    def get_sentence_list(self, text, tool = 'spacy'):
         """
             get sentence list from text by spaCy sentencizer
                 text: string - a given text
                 return: list - a list of sentences
         """
     
-        text = Helper.remove_emojis(text)    
-        doc = nlp(text)
+        text = Helper.remove_emojis(text)
         sen_list = []
-        for sent in doc.sents:
-            sen_list.append(sent.text.strip())
-        sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x]
-        #sen_list = sent_detector.tokenize(text)
+        
+        if (tool == 'spacy'):
+            doc = nlp(text)
+            for sent in doc.sents:
+                sen_list.append(sent.text.strip())
+            sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x]
+        else: # nlkt punkt
+            sen_list = sent_detector.tokenize(text)
     
         return sen_list
 
@@ -1022,9 +1059,9 @@ class Wikipedia():
 
     def get_content_by_section(self, content):
         """
-            split text into sections
-                content: string - a given v
-                return: dict - a dictionary
+            split content into sections
+                content: string - content
+                return: dict - content dict
         """
     
         return
@@ -1115,10 +1152,8 @@ class WikidataQuery():
 # -----------------------------------------------------------
 if __name__ == "__main__":
     wiki = Wikidata()
-    item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'class')
-
-    
-    print('item: ', item.claims)
+    item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'dict')
+    print('item: ', item)
 
 
     
