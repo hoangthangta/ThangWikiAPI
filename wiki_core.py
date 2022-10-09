@@ -765,7 +765,7 @@ class Wikidata():
             'search': term
             }
 
-        print('params: ', params)
+        #print('params: ', params)
         
         #response = requests.get(link, params)
         response = WikiRequest.get_data_by_link(link, params)
@@ -1032,7 +1032,7 @@ class Wikipedia():
     
     def get_sentence_list(self, text, tool = 'spacy'):
         """
-            get sentence list from text by spaCy sentencizer
+            get sentence list from text
                 text: string - a given text
                 return: list - a list of sentences
         """
@@ -1044,10 +1044,10 @@ class Wikipedia():
             doc = nlp(text)
             for sent in doc.sents:
                 sen_list.append(sent.text.strip())
-            sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x]
         else: # nlkt punkt
             sen_list = sent_detector.tokenize(text)
-    
+            
+        sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x]
         return sen_list
 
     def get_first_sentence(self, text):
@@ -1150,10 +1150,22 @@ class WikidataQuery():
 # -----------------------------------------------------------
 
 # -----------------------------------------------------------
-if __name__ == "__main__":
-    wiki = Wikidata()
-    item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'dict')
+'''if __name__ == "__main__":
+
+
+    wiki1 = Wikidata()
+    wiki2 = Wikipedia()
+
+    item = wiki1.get_item_by_id('Q472550', return_type = 'dict')
     print('item: ', item)
+
+    page = wiki2.get_page(item['sitelink'], return_type = 'dict')
+    print('page: ', page)'''
+
+
+
+
+    
 
 
     
