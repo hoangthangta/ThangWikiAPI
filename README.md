@@ -27,7 +27,7 @@ print('description: ', item['description']) # print description
 ```
 
 Note:
-*Use parameter **language** to define your own language project, e.g **language = 'fr'**.
+* Use parameter *language* to define your own language project, e.g *language = 'fr'*.
 
 Result:
 ```
