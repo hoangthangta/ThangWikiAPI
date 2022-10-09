@@ -156,4 +156,4 @@ page:  {'idx': 32377579, 'namespace': 0, 'input_title': 'György Gyula Zagyva', 
 * WikiDes: https://github.com/declare-lab/WikiDes
 
 # Contact
-* Email: tahoangthang@gmail.com
+* Hoang Thang Ta, tahoangthang@gmail.com
