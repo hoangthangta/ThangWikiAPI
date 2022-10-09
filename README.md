@@ -40,12 +40,12 @@ Code:
 from wiki_core import *
 
 wiki = Wikidata()
-item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'class')
+item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'class') # class return
 print('item: ', vars(item)) # print class structure
 print('wikidata_id: ', item.wikidata_id) # print wikidata_id
 print('description: ', item.description) # print description
 
-item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'dict')
+item = wiki.get_item_by_title('György Gyula Zagyva', return_type = 'dict') # dict return
 print('item: ', item) # print dict
 print('wikidata_id: ', item['wikidata_id']) # print wikidata_id
 print('description: ', item['description']) # print description
@@ -95,7 +95,25 @@ triples:  [['science', 'instance_of', 'academic discipline'], ['science', 'insta
 
 ## Wikidata: Examples
 
-###
+### Get page by title
+Code:
+```
+wiki = Wikipedia()
+page = wiki.get_page('György Gyula Zagyva', return_type = 'class') # class return
+print('page: ', vars(page))
+print('categories: ', page.categories)
+
+wiki = Wikipedia()
+page = wiki.get_page('György Gyula Zagyva', return_type = 'dict') # dict return
+print('page: ', page)
+print('categories: ', page['categories'])
+```
+
+Result:
+```
+page:  {'idx': 32377579, 'namespace': 0, 'input_title': 'György Gyula Zagyva', 'title': 'György Gyula Zagyva', 'content': 'György Gyula Zagyva (born 18 May 1976) is a Hungarian electrician, politician and former member of the National Assembly of Hungary between 2010 and 2014. He is also the co-leader of the Sixty-Four Counties Youth Movement, a Hungarian far-right youth organization.\nPreviously, he was struck again and again as disseminators of right-wing ideas and attacks against minorities in Hungary. In 2002 Zagyva learned to know the 64 counties, since 2003, he was vice president. In 2006 he took over the leadership of László Toroczkai, which still remained honorary president of the organization until he created a new movement in 2018.\nSince 2009, it is him and several other members of the 64 counties for two years forbidden to enter Serbian territory. This was due to their activities in Vojvodina, a Serbian province, home to many Hungarians. The organization had called on the Hungarian minority to oppose Serbia and Hungarian children sent to school supplies.\n\n\n== External links ==\nÖnéletrajza (in Hungarian)\nInformációk közéleti működéséről (in Hungarian)', 'first_paragraph': 'György Gyula Zagyva (born 18 May 1976) is a Hungarian electrician, politician and former member of the National Assembly of Hungary between 2010 and 2014. He is also the co-leader of the Sixty-Four Counties Youth Movement, a Hungarian far-right youth organization.\nPreviously, he was struck again and again as disseminators of right-wing ideas and attacks against minorities in Hungary. In 2002 Zagyva learned to know the 64 counties, since 2003, he was vice president. In 2006 he took over the leadership of László Toroczkai, which still remained honorary president of the organization until he created a new movement in 2018.\nSince 2009, it is him and several other members of the 64 counties for two years forbidden to enter Serbian territory. This was due to their activities in Vojvodina, a Serbian province, home to many Hungarians. The organization had called on the Hungarian minority to oppose Serbia and Hungarian children sent to school supplies.', 'first_sentence': 'György Gyula Zagyva (born 18 May 1976) is a Hungarian electrician, politician and former member of the National Assembly of Hungary between 2010 and 2014.', 'categories': ['Category:1976 births', 'Category:Hungarian politician stubs', 'Category:Jobbik politicians', 'Category:Living people', 'Category:Members of the National Assembly of Hungary (2010–2014)', 'Category:People from Eger'], 'templates': ['Template:Ambox', 'Template:Asbox', 'Template:Asbox/styles.css', 'Template:Authority control', 'Template:Birth date and age', 'Template:Br separated entries', 'Template:Category handler', 'Template:Citation needed', 'Template:Count', 'Template:Country2nationality']}
+categories:  ['Category:1976 births', 'Category:Hungarian politician stubs', 'Category:Jobbik politicians', 'Category:Living people', 'Category:Members of the National Assembly of Hungary (2010–2014)', 'Category:People from Eger']
+```
 
 # Contact
 * Email: tahoangthang@gmail.com
