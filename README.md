@@ -119,6 +119,7 @@ categories:  ['Category:1976 births', 'Category:Hungarian politician stubs', 'Ca
 ### Search by Wikipedia
 Code:
 ```
+from wiki_core import *
 wiki = Wikipedia()
 result = wiki.search_wikipedia('sciernce', limit = 5, language = 'en', key_len = 2)
 print('page: ', result)
