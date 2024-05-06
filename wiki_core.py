@@ -17,7 +17,7 @@ import nltk
 sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
 
 import spacy
-from spacy import displacy
+#from spacy import displacy
 nlp = spacy.load('en_core_web_md')
 nlp.add_pipe('sentencizer', before='parser') # for spaCy 3.x.x
 
@@ -26,10 +26,59 @@ from dateutil.easter import *
 from dateutil.parser import *
 from dateutil.relativedelta import *
 from dateutil.rrule import *'''
-from read_write_file import *
+#from file_io import *
 
 # class Helper --------------------------------------------------
 class Helper():
+
+    @staticmethod
+    def remove_subsection(text):
+
+        try: text = text[0:text.index('References')]
+        except: pass
+
+        try: text = text[0:text.index('Notes')]
+        except: pass
+
+        try: text = text[0:text.index('External links')]
+        except: pass
+        
+        return text
+
+
+    @staticmethod
+    def remove_heading(text):
+        text = re.sub(r'==([\w|\s|=])*==', '', text)
+        return text
+        
+
+    @staticmethod
+    def unwiki(text):
+        """
+            remove wiki markup from the text.
+        """
+        text = re.sub(r'(?i)\{\{IPA(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), text)
+        text = re.sub(r'(?i)\{\{Lang(\-[^\|\{\}]+)*?\|([^\|\{\}]+)(\|[^\{\}]+)*?\}\}', lambda m: m.group(2), text)
+        text = re.sub(r'\{\{[^\{\}]+\}\}', '', text)
+        text = re.sub(r'(?m)\{\{[^\{\}]+\}\}', '', text)
+        text = re.sub(r'(?m)\{\|[^\{\}]*?\|\}', '', text)
+        text = re.sub(r'(?i)\[\[Category:[^\[\]]*?\]\]', '', text)
+        text = re.sub(r'(?i)\[\[Image:[^\[\]]*?\]\]', '', text)
+        text = re.sub(r'(?i)\[\[File:[^\[\]]*?\]\]', '', text)
+        #text = re.sub(r'\[\[[^\[\]]*?\|([^\[\]]*?)\]\]', lambda m: m.group(1), text)
+        #text = re.sub(r'\[\[([^\[\]]+?)\]\]', lambda m: m.group(1), text)
+        #text = re.sub(r'\[\[([^\[\]]+?)\]\]', '', text)
+        text = re.sub(r'(?i)File:[^\[\]]*?', '', text)
+        #text = re.sub(r'\[[^\[\]]*? ([^\[\]]*?)\]', lambda m: m.group(1), text)
+        #text = re.sub(r"''+", '', text)
+        #text = re.sub(r'(?m)^\*$', '', text)
+  
+        text = re.sub(r'\<.*\>', '', text)
+
+        text = text.replace('\r', '')
+        text = text.replace('\n', '').strip()
+        
+        return text
 
     @staticmethod
     def create_link(link, params):
@@ -105,7 +154,7 @@ class WikiRequest():
         response = requests.get(link, params, timeout = timeout)
         if (data_format == 'xml'): response = ET.fromstring(response.text)
         elif (data_format == 'json'): response = json.loads(response.text)
-
+        
         return response
 # -----------------------------------------------------------
 
@@ -131,7 +180,7 @@ class Item():
 # class Wikidata --------------------------------------------
 class Wikidata():
 
-    def get_item_by_id(self, wikidata_id, language = 'en', return_type = 'dict'):
+    def get_item_by_id(self, wikidata_id, language = 'en', descriptions = ['en', 'vi', 'tl', 'ms', 'id'], return_type = 'dict', pass_wiki_page = False):
         """
             get a Wikidata item by id (e.g. Q123)
                 wikidata_id: string - Wikidata identifier
@@ -151,12 +200,26 @@ class Wikidata():
             else: item_type = 'unknown'
             
             wikidata_root = self.get_wikidata_root(wikidata_id)
+            
+
+            # check redirects
+            from_id, to_id = self.get_redirect_id(wikidata_root)
+            if (from_id == wikidata_id and from_id != to_id): wikidata_id = to_id
+            
             description = self.get_description(wikidata_root, language)
+            
+            description_dict = {}
+            for lang in descriptions:
+                value = self.get_description(wikidata_root, lang)
+                if (value != ''):
+                    description_dict[lang] = value
     
-            if ('disambiguation page' in description.lower() or 'wiki' in description.lower()): return {}
+            if (pass_wiki_page == True):
+                if ('disambiguation page' in description.lower() or 'wiki' in description.lower()): return {}
 
             label = self.get_label(wikidata_root, language)
             sitelink = self.get_sitelink(wikidata_root, language)
+            sitelinks = self.get_sitelinks(wikidata_root, language)
             
             claims = self.get_claims(wikidata_root, wikidata_id)
             instances = self.get_instance_of(claims, language)
@@ -168,7 +231,9 @@ class Wikidata():
             item_dict['item_type'] = item_type
             item_dict['label'] = label
             item_dict['description'] = description
+            item_dict['description_dict'] = description_dict
             item_dict['sitelink'] = sitelink
+            item_dict['sitelinks'] = sitelinks
             
             item_dict['instances'] = instances
             item_dict['subclasses'] = subclasses
@@ -177,7 +242,7 @@ class Wikidata():
             item_dict['claims'] = claims 
         
         except Exception as e:
-            print('Error --- get_item_by_id: ', e)
+            #print('Error --- get_item_by_id: ', e)
             pass
 
         if (return_type == 'class'):
@@ -300,6 +365,26 @@ class Wikidata():
         except: pass
         return ''
 
+    
+    def get_sitelinks(self, root, language = 'en'):
+        """
+            get a sitelink of a Wikipedia project from the Wikidata's XML data
+                root: string - XML data of Wikidata
+                wiki: string - a shortcut for a Wikipedia project
+                return: string - a sitelink
+        """
+        
+        sitelink_dict = {}
+        try:
+            for x in root.find('./entities/entity/sitelinks'):
+                #if (x.attrib['site'] == wiki):
+                value = Helper.remove_emojis(x.attrib['title'])
+                if (value != ''):
+                    sitelink_dict[x.attrib['site']] = value
+                    #return value
+        except: pass
+        return sitelink_dict
+        
     def get_id(self, root):
         """
             get an identifier of an Wikidata item
@@ -326,7 +411,7 @@ class Wikidata():
             }
     
         root = WikiRequest.get_data_by_link(link, params)           
-        return get_label(root)
+        return self.get_label(root)
 
 
     def get_label(self, root, language = 'en'):
@@ -372,7 +457,22 @@ class Wikidata():
         except:
             pass
         return ''  
-       
+
+    def get_redirect_id(self, root):
+        """
+            check root containing new wikidata_id or not
+                root: string - XML data
+                
+                return: string - new wikidata_id
+        """
+
+        try:
+            for x in root.find('./entities/entity'):
+                if (x.tag == 'redirects'):
+                    return x.attrib['from'], x.attrib['to']
+        except Exception as e:
+            pass
+        return '', ''
 
     def get_value_by_property(self, claim_list, property_name, language = 'en'):
         """
@@ -765,6 +865,7 @@ class Wikidata():
             'search': term
             }
 
+        print(Helper.create_link(link, params))
         #print('params: ', params)
         
         #response = requests.get(link, params)
@@ -815,6 +916,7 @@ class Wikipedia():
     def get_page(self, title, data_format = 'json', language = 'en', redirect = True, return_type = 'dict',  timeout = 45):
 
         response = self.get_data_by_title(title, data_format, language, redirect, timeout)
+        #print('response: ', response)
         
         page_dict = {}
         page_dict['idx'] = self.get_idx(response, data_format)
@@ -822,7 +924,9 @@ class Wikipedia():
         page_dict['input_title'] = title # in case of redirects
         page_dict['title'] = self.get_title(response, data_format)
         page_dict['content'] = self.get_page_content(response, data_format)
+        page_dict['raw_content'] = self.get_raw_page_content(response, data_format)
         page_dict['first_paragraph'] = self.get_first_paragraph(page_dict['content'])
+        page_dict['first_raw_paragraph'] = self.get_first_raw_paragraph(page_dict['raw_content'])
         page_dict['first_sentence'] = self.get_first_sentence(page_dict['first_paragraph'])
         page_dict['categories'] = self.get_category(response, data_format)
         page_dict['templates'] = self.get_template(response, data_format)
@@ -831,7 +935,8 @@ class Wikipedia():
             return Page(page_dict['idx'], page_dict['namespace'], page_dict['input_title'], page_dict['title'], \
                         page_dict['content'], page_dict['first_paragraph'], page_dict['first_sentence'], \
                         page_dict['categories'], page_dict['templates'])
-        
+
+        #print('page_dict: ', page_dict['content'])
         return page_dict
 
     def get_title(self, data, data_format):
@@ -969,22 +1074,27 @@ class Wikipedia():
                 language: string - language
                 return: string - return data
         """
+
+        if (title == ''): return ''
     
         link = 'https://' + language + '.wikipedia.org/w/api.php'
         params = {
             'action': 'query',
             'format': data_format,
             'explaintext': True,
+            'rvprop': 'content',
             'prop': 'extracts|revisions|pageprops|templates|categories',
-            '#exintro': True,
+            #'exintro': False,
             'rvprop': 'content',
             'rvslots': 'main',
             'titles': title,
             'clshow': '!hidden' # not show hidden categories
+            
             }
-        if (redirect == True): params['redirects'] = ''
 
-        #print(Helper.create_link(link, params))
+        if (redirect == False): params['redirects'] = False
+
+        print(Helper.create_link(link, params))
         response = WikiRequest.get_data_by_link(link, params, data_format, timeout)
         return response
     
@@ -999,9 +1109,55 @@ class Wikipedia():
         try:
             first_paragraph = content[0:content.index('==')].strip('\n')
         except:
+            first_paragraph = content.strip()
             pass
 
         return first_paragraph
+
+
+    def get_raw_page_content(self, data, data_format):
+        """
+            get page content
+                data: string - data
+                data_format: string - XML or JSON
+                return: string - content
+        """
+
+        content = ''
+        if (data_format  == 'xml'):
+            for node in data.find('./query/pages/page'):
+                if (node.tag == 'extract'):
+                    content = node.text
+                    break
+        elif(data_format == 'json'):
+            try:
+                data_dict = data['query']['pages']
+                key = next(iter(data_dict))
+                content = data_dict[key]['revisions'][0]['slots']['main']['*']
+        
+            except Exception as e:
+                #print('Error --- get_page_content: ', e)
+                pass
+
+        content = Helper.remove_emojis(content)
+        #print('content: ', content)
+        return content
+
+    def get_first_raw_paragraph(self, content):
+        """
+            get first paragraph
+                content: page content - string
+                return: string 
+        """
+
+        first_paragraph = ''
+        try:
+            first_paragraph = content[0:content.index('==')].strip('\n')
+        except:
+            pass
+
+        return first_paragraph
+  
     
     def get_page_content(self, data, data_format):
         """
@@ -1027,7 +1183,7 @@ class Wikipedia():
                 #print('Error --- get_page_content: ', e)
                 pass
 
-        content = Helper.remove_emojis(content)
+        #content = Helper.remove_emojis(content)
         return content
     
     def get_sentence_list(self, text, tool = 'spacy'):
@@ -1037,15 +1193,31 @@ class Wikipedia():
                 return: list - a list of sentences
         """
     
-        text = Helper.remove_emojis(text)
+        #text = Helper.remove_emojis(text)
         sen_list = []
         
         if (tool == 'spacy'):
             doc = nlp(text)
             for sent in doc.sents:
-                sen_list.append(sent.text.strip())
+                if ('wikivoyage' in sent.text.lower()): continue
+                if ('wikimedia' in sent.text.lower()): continue
+                if ('wikipedia' in sent.text.lower()): continue
+                if ('wiktionary' in sent.text.lower()): continue
+                if ('.' not in sent.text): continue
+                
+                sent_strip = ' '.join(x.strip() for x in sent.text.split() if x.strip() != '')
+                sen_list.append(sent_strip)
         else: # nlkt punkt
-            sen_list = sent_detector.tokenize(text)
+            for sent in sent_detector.tokenize(text):
+                if ('wikivoyage' in sent.lower()): continue
+                if ('wikimedia' in sent.lower()): continue
+                if ('wikipedia' in sent.lower()): continue
+                if ('wiktionary' in sent.lower()): continue
+                if ('.' not in sent): continue
+                
+                sent_strip = ' '.join(x.strip() for x in sent.split() if x.strip() != '')
+                sen_list.append(sent_strip)
+            
             
         sen_list = [x.strip() for x in sen_list if x.strip() != '' and '==' not in x]
         return sen_list
@@ -1107,11 +1279,13 @@ class Wikipedia():
 
         return {'value': result_term, 'suggestion': suggestion}
 
-# -----------------------------------------------------------
+# ---------------------------------------------------------------
 
 # class WikidataQuery -------------------------------------------
 class WikidataQuery():
-    def get_data_by_sparql_query(query, data_format = 'json', timeout = 45):
+
+    @staticmethod
+    def get_data(query, data_format = 'json', timeout = 60):
         """
             get the data from Wikidata server by SPARQL queries
                 query: string - a SPARQL query
@@ -1147,20 +1321,50 @@ class WikidataQuery():
                 result_list.append(binding)
 
         return result_list
+    
+    @staticmethod
+    def one_hop(id1, id2):
+
+        result = []
+    
+        query = 'SELECT ?prop1 ?propLabel'
+        query += ' WHERE {'
+        query += ' wd:' + id1 + ' ?prop1 wd:' + id2 + '.'
+        query += ' SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }'
+        query += ' ?prop wikibase:directClaim ?prop1.'
+        query += ' }'
+        print('query: ', query)
+        result += WikidataQuery.get_data(query)
+        
+        # inverse
+        query = 'SELECT ?prop1 ?propLabel'
+        query += ' WHERE {'
+        query += ' wd:' + id2 + ' ?prop1 wd:' + id1 + '.'
+        query += ' SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }'
+        query += ' ?prop wikibase:directClaim ?prop1.'
+        query += ' }'
+        
+        print('query: ', query)
+        result += WikidataQuery.get_data(query)
+        
+        print('result: ', result)
+        
+        return result
 # -----------------------------------------------------------
 
 # -----------------------------------------------------------
+
+
+
 '''if __name__ == "__main__":
 
+    api = WikidataQuery()
 
-    wiki1 = Wikidata()
-    wiki2 = Wikipedia()
+    results = api.one_hop('Q29', 'Q3624078')'''
+    
 
-    item = wiki1.get_item_by_id('Q472550', return_type = 'dict')
-    print('item: ', item)
 
-    page = wiki2.get_page(item['sitelink'], return_type = 'dict')
-    print('page: ', page)'''
+    
 
 
 
